@@ -18,8 +18,14 @@ import { MachineControl } from "./machine-control";
 import { RecalibrateAction } from "./recalibrate";
 import {
   calibrationAmendment,
+  calibrationSummary,
+  isRestored,
   residualDifferential,
   residualReading,
+  RESTORED_GATE_NOTE,
+  RESTORED_GATE_SUFFIX,
+  SCAN_TENSE_LABEL,
+  type CalibrationOutcome,
 } from "./recalibrate-copy";
 import { SafeSitAction } from "./safe-sit";
 import {
@@ -159,6 +165,35 @@ export function VerdictCard({
     return pair ? (session.channels.find((c) => c.joint === pair) ?? null) : null;
   }, [session.channels, report?.joint]);
 
+  /**
+   * The board's register.
+   *
+   * `clean` is a scan that found nothing; `restored` is a scan that found
+   * something and then watched the machine's own re-measure put it back inside
+   * the envelope. They are not the same finding and they do not read the same:
+   * a clean scan never had an anomaly to name, and this one still names the
+   * one it found — in the past tense, in phosphor, with the alert gone.
+   *
+   * One flag, read here and passed down, rather than six components each
+   * asking the calibration what its outcome was. Every surface below changes
+   * *together* or the card is telling two stories at once, which is exactly
+   * what it was doing when a cleared result was a single line of small type
+   * under a headline still shouting in red.
+   */
+  const restored = isRestored(session.calibration);
+
+  /**
+   * The one-shot acknowledgement plays for the event, not for the card.
+   *
+   * A sweep that ran every time the conclusion was picked back up would be the
+   * console reporting, a minute later and in the present tense, something that
+   * happened once. So it is armed only when the card was already mounted and
+   * still un-restored at the moment the re-measure landed — which is the only
+   * moment there is anything to acknowledge.
+   */
+  const restoredAtMount = React.useRef(restored);
+  const sweep = restored && !restoredAtMount.current;
+
   if (!report) return null;
 
   const clean = report.anomaly === "none";
@@ -177,8 +212,19 @@ export function VerdictCard({
       animate="shown"
       exit="gone"
       aria-labelledby="verdict-headline"
+      // The outcome, on the card itself, so the register the operator reads is
+      // the register a test (and the stylesheet) can ask about by name.
+      data-slot="verdict-card"
+      data-outcome={session.calibration?.outcome}
       className={cn(
         "flex flex-col gap-4",
+        // One luminance wash, left to right, once. It is the only motion this
+        // card spends on the result, and it is deliberately the cheapest kind:
+        // no travel, no scale, no bounce — a board that congratulated itself
+        // would stop being an instrument. Under reduced motion the global
+        // clamp collapses it to nothing and the card is simply already green,
+        // which is the whole message anyway (app/styles/machine.css).
+        sweep && "verdict-resolve-sweep",
         sheet ? "min-h-full px-4 pt-4" : "mt-4 border-t border-line-strong pt-4",
       )}
     >
@@ -194,7 +240,13 @@ export function VerdictCard({
           scrolling beats anything hand-rolled (see verdict-sheet.tsx). */}
       <header data-sheet-grab={sheet || undefined} className="flex flex-col gap-1">
         <div className="flex items-start justify-between gap-4">
-          <span className="text-label text-ink-muted uppercase">Verdict</span>
+          {/* The label carries the outcome the moment there is one. It is the
+              first line of the card in reading order, and after a clear it is
+              the first place the eye can be told that the thing below it is
+              over rather than ongoing. */}
+          <span className="text-label text-ink-muted uppercase">
+            Verdict{restored ? " · cleared" : null}
+          </span>
           {onMinimize ? (
             // A square, and one glyph inside it. The underscore is the only
             // mark in the mono set that already means "put this down" and it
@@ -228,18 +280,53 @@ export function VerdictCard({
 
             A clean scan spends neither the colour nor the second line — one
             phosphor line, still at display size, because "nothing is wrong"
-            is a finding too and deserves to be read as one. */}
+            is a finding too and deserves to be read as one.
+
+            And a *restored* channel spends the size without the colour. The
+            part is still named — ANKLE_R · ACTUATOR A-12 is what the scan
+            found and a headline that erased it would be a diagnosis with no
+            history — but the alert is gone from it, because there is no longer
+            an alert. This is the single largest thing on the surface changing
+            hue, which is what makes the result legible in the first glance
+            rather than in the third line of the fourth paragraph. */}
         <h2
           id="verdict-headline"
-          className={cn("text-display uppercase", clean ? "text-ink" : "text-alert")}
+          className={cn(
+            "text-display uppercase",
+            clean ? "text-ink" : restored ? "text-nominal" : "text-alert",
+          )}
         >
           {clean
             ? "No anomaly detected"
             : `${machineJoint(report.joint)} · ${machineComponent(report.component)}`}
         </h2>
         {clean ? null : (
-          <p data-slot="verdict-anomaly" className="text-title text-alert uppercase">
+          /* The finding, and — once a calibration has answered it — the
+             outcome, on one line at one size.
+
+             The outcome word rides here rather than on a line of its own
+             because "what kind of wrong" and "is it still wrong" are one
+             question, and the operator asks it in one glance. The two halves
+             are toned separately and that asymmetry is the whole point:
+             CLEARED puts the entire line into phosphor, because nothing about
+             it is a warning any more; PARTIAL leaves the anomaly in alert and
+             prints itself in amber beside it, because a fault that is still
+             there and a correction that did not finish are two facts and the
+             card owes both. */
+          <p
+            data-slot="verdict-anomaly"
+            className={cn(
+              "text-title uppercase",
+              restored ? "text-nominal" : "text-alert",
+            )}
+          >
             {report.anomaly} anomaly
+            {session.calibration ? (
+              <span className={restored ? undefined : "text-warn"}>
+                {" · "}
+                {session.calibration.outcome}
+              </span>
+            ) : null}
           </p>
         )}
         {/* The differential: what produces this signature, one dim
@@ -258,7 +345,12 @@ export function VerdictCard({
             the one place the machine's summary is shown verbatim — the operator
             page translates the same facts into its own sentence rather than
             shouting this one across a warm-white banner. */}
-        <p className="mt-1 max-w-[52ch] text-small text-ink-soft">{report.summary}</p>
+        <VerdictSummary
+          summary={report.summary}
+          anomaly={report.anomaly}
+          calibration={session.calibration}
+          channels={session.channels}
+        />
       </header>
 
       {subject ? (
@@ -313,6 +405,7 @@ export function VerdictCard({
           recommendations={report.recommendations}
           acknowledged={acknowledged}
           anomaly={report.anomaly}
+          restored={restored}
         />
       )}
 
@@ -359,6 +452,70 @@ export function VerdictCard({
 }
 
 /**
+ * The machine's own prose, and its tense.
+ *
+ * One paragraph until a calibration clears the fault, and two afterwards, and
+ * the second one is the whole reason this is a component rather than a line of
+ * JSX. `report.summary` is written in the present — "LIVE TRACE DISPLACED 0.21
+ * FROM REFERENCE DATUM" — because when the scanner wrote it the trace was
+ * displaced by 0.21. After a cleared re-measure it is displaced by 0.012, and
+ * that sentence left standing on its own is the most misleading thing on the
+ * card: the machine's own words, in the present tense, about a measurement that
+ * has been superseded.
+ *
+ * It is not rewritten and it is not dropped. It is *dated* — labelled AT SCAN
+ * and dropped one luminance tier — and the sentence that is true now is printed
+ * under it at full phosphor. The scan's finding stays on the record where a
+ * reader can see what the calibration was measured against; what changes is
+ * which of the two lines the card is asserting.
+ *
+ * A partial result gets neither treatment. The report's summary is still an
+ * accurate description of that channel — the trace really is still off its
+ * reference — so there is nothing to date and nothing to add.
+ */
+function VerdictSummary({
+  summary,
+  anomaly,
+  calibration,
+  channels,
+}: {
+  summary: string;
+  anomaly: string;
+  calibration: DiagSession["calibration"];
+  channels: readonly DiagChannel[];
+}) {
+  // The same measurement the amendment and the trace's own footer print, from
+  // the same two arrays: three sentences about one number, one number.
+  const after = React.useMemo(() => {
+    if (!calibration) return null;
+    const ref = channels.find((c) => c.joint === calibration.joint)?.ref;
+    if (!ref) return null;
+    return calibrationSummary(
+      calibration.outcome,
+      residualReading(anomaly, calibration.wave, ref),
+    );
+  }, [anomaly, calibration, channels]);
+
+  if (!after) {
+    return <p className="mt-1 max-w-[52ch] text-small text-ink-soft">{summary}</p>;
+  }
+
+  return (
+    <div className="mt-1 flex max-w-[52ch] flex-col gap-1">
+      <p className="text-small text-ink-muted">
+        {/* The date stamp is a label, not a sentence: it is the same 10px
+            wide-tracked idiom every other piece of metadata on this board
+            wears, so it reads as a marker on the line rather than as the first
+            words of it. */}
+        <span className="text-label uppercase">{SCAN_TENSE_LABEL} · </span>
+        {summary}
+      </p>
+      <p className="text-small text-ink">{after}</p>
+    </div>
+  );
+}
+
+/**
  * The differential, and — once the cheapest rung has been tried — what the
  * attempt was worth.
  *
@@ -396,7 +553,7 @@ function VerdictDifferential({
   }, [anomaly, calibration, channels]);
 
   if (!differential && !calibration) return null;
-  const cleared = calibration?.outcome === "cleared";
+  const cleared = isRestored(calibration);
   return (
     <>
       {differential ? (
@@ -427,7 +584,7 @@ function ResidualDifferential({
   outcome,
 }: {
   anomaly: string;
-  outcome: "partial" | "cleared";
+  outcome: CalibrationOutcome;
 }) {
   const remaining = residualDifferential(anomaly, outcome);
   if (!remaining) return null;
@@ -465,6 +622,7 @@ function VerdictActions({
   recommendations,
   acknowledged,
   anomaly,
+  restored,
 }: {
   unitId: string;
   /** The session's clock — the key the press times are filed under. */
@@ -477,19 +635,43 @@ function VerdictActions({
    * cannot fix, which is a fact about the diagnosis and not about the button.
    */
   anomaly: string;
+  /**
+   * The machine's re-measure said the channel came back.
+   *
+   * The receipts stay — they are the audit, and a console that tidied away the
+   * proof of what it did to a robot would be worse than one that never showed
+   * it. What goes is the *offer*: DISPATCH SERVICE and DISABLE JOINT are the
+   * rungs above a calibration, and continuing to present them as live decisions
+   * under a headline that says the fault is over is the card asking the operator
+   * to send a van to a robot that is fine.
+   *
+   * Demoted rather than hidden, and that is the same ruling this group already
+   * makes about the posture gate: the report recommended these, and a card that
+   * removes a recommendation is editing the report. So they render inert, with
+   * the reason on the label, exactly as a gated action does — the difference
+   * being that this gate never lifts, which is the correct shape for a
+   * precondition that is not a posture but a fault that no longer exists.
+   */
+  restored: boolean;
 }) {
   const executeId = React.useId();
   const recordId = React.useId();
   const recordNoteId = React.useId();
   const gateNoteId = React.useId();
+  const restoredNoteId = React.useId();
   const { execute, record } = React.useMemo(
     () => splitRecommendations(recommendations),
     [recommendations],
   );
   const seated = useFleetStore((s) => s.units[unitId]?.posture) === "sitting";
   const anyGated =
+    !restored &&
     !seated &&
     record.some((a) => isPostureGatedRecommendation(a) && !acknowledged.includes(a));
+  // The restored note outranks the posture note, and replaces it rather than
+  // stacking with it: a posture gate on a robot with nothing wrong with it is a
+  // true statement about a decision nobody is being asked to make.
+  const anyRestored = restored && record.some((a) => !acknowledged.includes(a));
 
   return (
     <div className="flex flex-col gap-4">
@@ -524,9 +706,12 @@ function VerdictActions({
             {record.map((action) => {
               const done = acknowledged.includes(action);
               const at = done ? acknowledgedTime(unitId, startedAt, action) : undefined;
-              // A record that happened outranks the gate: "· recorded" is a
-              // fact about the incident, and posture cannot un-happen it.
-              const gated = !done && !seated && isPostureGatedRecommendation(action);
+              // A record that happened outranks either gate: "· recorded" is a
+              // fact about the incident, and neither a posture nor a cleared
+              // channel can un-happen it.
+              const spent = !done && restored;
+              const gated =
+                !done && !spent && !seated && isPostureGatedRecommendation(action);
               return (
                 <ConsoleButton
                   key={action}
@@ -539,7 +724,7 @@ function VerdictActions({
                   // A gated action is disabled for the other reason: pressing
                   // it would file a recommendation whose precondition the
                   // robot's own body currently fails.
-                  disabled={done || gated}
+                  disabled={done || gated || spent}
                   aria-pressed={done}
                   // The caveat is the description of each of these controls,
                   // not a sentence floating under the card: ask any one of
@@ -549,7 +734,9 @@ function VerdictActions({
                   // operator who can see there are two buttons. A gated action
                   // is described by its gate instead — the more load-bearing
                   // fact while it holds.
-                  aria-describedby={gated ? gateNoteId : recordNoteId}
+                  aria-describedby={
+                    spent ? restoredNoteId : gated ? gateNoteId : recordNoteId
+                  }
                   className={done ? "tnum" : undefined}
                   onClick={() => {
                     useIncidentStore.getState().acknowledgeRecommendation(action);
@@ -562,13 +749,20 @@ function VerdictActions({
                 >
                   {done
                     ? acknowledgedLabel(action, at === undefined ? null : clockTime(at))
-                    : gated
-                      ? postureGateLabel(action)
-                      : action}
+                    : spent
+                      ? `${action} · ${RESTORED_GATE_SUFFIX}`
+                      : gated
+                        ? postureGateLabel(action)
+                        : action}
                 </ConsoleButton>
               );
             })}
           </div>
+          {anyRestored ? (
+            <p id={restoredNoteId} className="text-label text-ink-muted uppercase">
+              {RESTORED_GATE_NOTE}
+            </p>
+          ) : null}
           {anyGated ? (
             <p id={gateNoteId} className="text-label text-ink-muted uppercase">
               {POSTURE_GATE_NOTE}

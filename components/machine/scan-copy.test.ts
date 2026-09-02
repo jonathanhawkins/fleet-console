@@ -144,6 +144,18 @@ describe("scanStatusLine", () => {
     ).toBe("SCAN COMPLETE · 06 CHANNELS · NO ANOMALY");
   });
 
+  it("says what became of the anomaly once the machine has re-measured it", () => {
+    // The count does not move — one was found, one is on the record — and the
+    // last line of chrome on the surface stops disagreeing with the board.
+    expect(
+      scanStatusLine(
+        progress({ channels: 6, flagged: true, hasVerdict: true, cleared: true }),
+        "open",
+        "verdict",
+      ),
+    ).toBe("SCAN COMPLETE · 06 CHANNELS · 01 ANOMALY CLEARED");
+  });
+
   it("lets a held link outrank progress, in every phase", () => {
     // The count is still true about what arrived and completely misleading
     // about what is happening, so it does not get said.
@@ -162,5 +174,16 @@ describe("scanPhaseWord", () => {
     expect(scanPhaseWord("open", "verdict")).toBe("VERDICT");
     expect(scanPhaseWord("lost", "scanning")).toBe("HOLD");
     expect(scanPhaseWord("resumed", "verdict")).toBe("HOLD");
+  });
+
+  it("prints the newest true word once the correction has landed", () => {
+    // CLEARED displaces VERDICT rather than qualifying it: by then the verdict
+    // is the older fact. A partial deliberately leaves VERDICT (and with it the
+    // header's amber) standing — the fault is still there.
+    expect(scanPhaseWord("open", "verdict", true)).toBe("CLEARED");
+    expect(scanPhaseWord("open", "verdict", false)).toBe("VERDICT");
+    // The link still outranks everything: a cleared channel on a dead socket is
+    // a claim the console cannot currently stand behind.
+    expect(scanPhaseWord("lost", "verdict", true)).toBe("HOLD");
   });
 });

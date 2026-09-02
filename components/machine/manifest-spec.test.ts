@@ -100,6 +100,48 @@ describe("buildManifest", () => {
     expect(entries.filter((e) => e.state === "damaged")).toHaveLength(1);
   });
 
+  it("stamps the subject RESTORED once the machine re-measures it clean", () => {
+    // The board consumes the recalibration the same way it consumed the flag:
+    // both are the machine's own judgement about that channel. A row left
+    // DAMAGED under a verdict card saying the channel is back would be the
+    // board and the conclusion telling two stories.
+    const entries = buildManifest(
+      session({
+        channels: [channel("knee_L")],
+        flag,
+        calibration: {
+          k: "recalibration",
+          joint: "knee_L",
+          wave: [0, 1],
+          ref: [0, 1],
+          outcome: "cleared",
+        },
+      }),
+    );
+    expect(stateOf(entries, "KNEE_L")).toBe("restored");
+    expect(entries.filter((e) => e.state === "damaged")).toHaveLength(0);
+    // Not folded into OPERATING: fourteen rows cleared because they were
+    // checked, and this one cleared because it was fixed.
+    expect(entries.filter((e) => e.state === "restored")).toHaveLength(1);
+  });
+
+  it("holds the stamp at DAMAGED while the correction is only partial", () => {
+    const entries = buildManifest(
+      session({
+        channels: [channel("knee_L")],
+        flag,
+        calibration: {
+          k: "recalibration",
+          joint: "knee_L",
+          wave: [0, 1],
+          ref: [0, 1],
+          outcome: "partial",
+        },
+      }),
+    );
+    expect(stateOf(entries, "KNEE_L")).toBe("damaged");
+  });
+
   it("counts a damaged row as cleared — it was checked, and it answered", () => {
     const entries = buildManifest(session({ channels: [channel("knee_L")], flag }));
     expect(manifestCleared(entries)).toBe(1);

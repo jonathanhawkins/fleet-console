@@ -110,6 +110,12 @@ export interface ScanProgress {
   channels: number;
   flagged: boolean;
   hasVerdict: boolean;
+  /**
+   * The one anomaly this scan found has since been re-measured back inside its
+   * envelope. Only ever true alongside `flagged`: it is a fact about the
+   * anomaly, not a fourth thing the scan counted.
+   */
+  cleared?: boolean;
 }
 
 /**
@@ -130,9 +136,15 @@ export function scanStatusLine(
   if (link === "resumed") return "HOLD · LINK RESTORED · AWAITING SEQUENCE";
 
   if (phase === "verdict") {
-    return progress.flagged
-      ? `SCAN COMPLETE · ${pad2(progress.channels)} CHANNELS · 01 ANOMALY`
-      : `SCAN COMPLETE · ${pad2(progress.channels)} CHANNELS · NO ANOMALY`;
+    if (!progress.flagged)
+      return `SCAN COMPLETE · ${pad2(progress.channels)} CHANNELS · NO ANOMALY`;
+    // The count does not move — one anomaly was found and one anomaly is on the
+    // record — and the tail says what became of it. A status rule still reading
+    // "01 ANOMALY" under a board whose subject row says RESTORED is the last
+    // line of chrome on the surface disagreeing with everything above it.
+    return progress.cleared
+      ? `SCAN COMPLETE · ${pad2(progress.channels)} CHANNELS · 01 ANOMALY CLEARED`
+      : `SCAN COMPLETE · ${pad2(progress.channels)} CHANNELS · 01 ANOMALY`;
   }
 
   if (progress.channels > 0) {
@@ -155,10 +167,28 @@ export function scanStatusLine(
   return "INITIALISING SCAN · AWAITING SUBSYSTEM TREE";
 }
 
-/** The one-word phase in the session header, beside the elapsed clock. */
-export function scanPhaseWord(link: ScanLink, phase: "scanning" | "verdict"): string {
+/**
+ * The one-word phase in the session header, beside the elapsed clock.
+ *
+ * `cleared` is the fourth word and it displaces VERDICT rather than qualifying
+ * it, because by then VERDICT is the *older* fact: the scan concluded, the
+ * operator acted, and the machine answered. A header chip is one word wide and
+ * the word it owes the operator is the newest true one.
+ *
+ * A *partial* correction deliberately leaves VERDICT standing in amber. It is
+ * still a fault under a standing conclusion with a service call attached, and
+ * printing PARTIAL up here would spend the header on a nuance that the card two
+ * panels down states properly — while quietly retiring the amber that is the
+ * only thing on this rule saying something is wrong.
+ */
+export function scanPhaseWord(
+  link: ScanLink,
+  phase: "scanning" | "verdict",
+  cleared = false,
+): string {
   if (link !== "open") return "HOLD";
-  return phase === "verdict" ? "VERDICT" : "SCANNING";
+  if (phase !== "verdict") return "SCANNING";
+  return cleared ? "CLEARED" : "VERDICT";
 }
 
 /**

@@ -53,6 +53,30 @@ export function verdictLine(report: VerdictReport): string {
   return `${jointLabel(report.joint)} ${component}: ${report.anomaly} anomaly.`;
 }
 
+/**
+ * …and what happened to it, when a recalibration answered it.
+ *
+ * A second sentence rather than a rewrite of the first. The scan found an
+ * offset anomaly on that actuator and it is still true that it did; what the
+ * banner owes an operator arriving back on the unit page is the *outcome*, and
+ * a page that folded the two into "no anomaly" would be reporting a scan that
+ * never happened.
+ *
+ * Operator voice, sentence case, and no jargon: the machine's residual figure
+ * and its RESIDUAL 0.012 FROM DATUM belong on the instrument and in the filed
+ * report, both of which are one click away. The banner's job is the register —
+ * this unit is not waiting for anybody.
+ */
+export function verdictOutcomeLine(
+  report: VerdictReport,
+  outcome: "partial" | "cleared" | undefined,
+): string {
+  const line = verdictLine(report);
+  if (outcome === "cleared") return `${line} Cleared by recalibration.`;
+  if (outcome === "partial") return `${line} Recalibration partial.`;
+  return line;
+}
+
 const TONE_SURFACE = {
   warn: "border-warn/35 bg-warn-tint",
   alert: "border-alert/35 bg-alert-tint",
@@ -296,8 +320,25 @@ export function IncidentBanner({ className, unitId, ...props }: IncidentBannerPr
   // Nothing to say — through the reveal, so a banner closes rather than disappears.
   if (!unit || state === "none") return <BannerReveal>{null}</BannerReveal>;
 
-  // A diagnosed incident is amber whatever the unit's status.
-  const tone = resolved ? "warn" : unitStatusChip(unit.status);
+  /**
+   * The remote fix worked and the machine said so.
+   *
+   * Read off the archived incident rather than off the unit's live status,
+   * because the two answer different questions: the status says how the robot
+   * is *right now*, and this says how the diagnostic ended. A unit that has
+   * since developed something else must still be able to say "the last
+   * diagnostic cleared" about the last diagnostic.
+   */
+  const restored = record?.calibration?.outcome === "cleared";
+
+  /**
+   * A diagnosed incident is amber whatever the unit's status — unless the thing
+   * it diagnosed was corrected over the link, in which case the banner has no
+   * business wearing the colour of an open problem. It stays on screen (the
+   * incident happened, the report is worth reading, the re-run is worth
+   * offering) and it stops being loud.
+   */
+  const tone = resolved ? (restored ? "nominal" : "warn") : unitStatusChip(unit.status);
   const incident = latest ? incidentHeadline(latest.message, unit.name) : null;
   /** A verdict that found nothing has no part to name and nothing to dispatch. */
   const clean = complete && report?.anomaly === "none";
@@ -309,14 +350,19 @@ export function IncidentBanner({ className, unitId, ...props }: IncidentBannerPr
         ? "Diagnostic complete — no anomaly"
         : "Diagnostic complete"
       : resolved
-        ? "Diagnostic complete — service recommended"
+        ? restored
+          ? "Diagnostic complete — fault cleared"
+          : "Diagnostic complete — service recommended"
         : (incident ?? `${unit.name} needs attention`);
 
   // In the working states the incident line demotes to the subhead.
   let detail: string | null = null;
   if (running) detail = incident;
   else if (complete) detail = clean ? null : report ? verdictLine(report) : incident;
-  else if (resolved) detail = archived ? verdictLine(archived) : incident;
+  else if (resolved)
+    detail = archived
+      ? verdictOutcomeLine(archived, record?.calibration?.outcome)
+      : incident;
 
   // Shown only while undiagnosed; ticks off the shared 1 s clock, never a version counter.
   const openFor = state === "raised" ? durationSince(firstRaisedAt, now) : null;
@@ -344,7 +390,14 @@ export function IncidentBanner({ className, unitId, ...props }: IncidentBannerPr
         >
           <div className="flex min-w-0 flex-col gap-1.5 max-[30rem]:w-full">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <SectionLabel tone={tone === "alert" ? "alert" : "warn"}>
+              {/* The eyebrow follows the surface it sits on. A "Diagnostic"
+                  label printed in amber over a calm ground would be the one
+                  remaining piece of this banner still reporting a problem. */}
+              <SectionLabel
+                tone={
+                  tone === "alert" ? "alert" : tone === "nominal" ? "nominal" : "warn"
+                }
+              >
                 {running || complete || resolved
                   ? "Diagnostic"
                   : unitStatusCopy(unit.status)}

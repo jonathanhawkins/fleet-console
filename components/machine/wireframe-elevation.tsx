@@ -140,8 +140,24 @@ const TWO_PI = Math.PI * 2;
 /** Inset kept clear of the box on every side, CSS px. */
 const MARGIN = 6;
 
-/** The flagged module. It does not defer to anything, on any tier. */
-const ALPHA_ALERT = 0.95;
+/** The subject module. It does not defer to anything, on any tier. */
+const ALPHA_SUBJECT = 0.95;
+
+/**
+ * How the figure is currently drawing the joint the scan is about.
+ *
+ * The module the diagnostic singled out is always the one thing on this drawing
+ * that ignores the depth ladder — but *which colour* it ignores it in is a fact
+ * about the diagnosis, not about the drawing. It is `alert` from the flag
+ * onward, and `nominal` once the machine's own re-measure has put the channel
+ * back inside its envelope. A red limb under a verdict card reading CLEARED was
+ * the last surface on this board still reporting a fault nobody has.
+ *
+ * Two values rather than a `restored` boolean, because the drawing does not
+ * need to know what a recalibration is: it is told which token to stroke the
+ * subject in, the way every other element in machine space is.
+ */
+export type SubjectTone = "alert" | "nominal";
 
 /** Sweep-lift window, matched to the waveform deck's reveal. */
 const LIFT_MS = 1400;
@@ -337,6 +353,11 @@ export interface WireframeElevationProps {
   data: WireframeData;
   /** Wire name of the flagged joint, e.g. "knee_L". Null before the flag. */
   damagedJoint?: string | null;
+  /**
+   * Which token the flagged module is drawn in — see {@link SubjectTone}.
+   * Defaults to `alert`, which is what a flag means until something answers it.
+   */
+  subjectTone?: SubjectTone;
   /** Channels as the session holds them; the newest one lifts its node. */
   channels?: DiagChannel[];
   /** No auto-turn: a static front elevation until the reader rotates it. */
@@ -352,10 +373,7 @@ export interface WireframeElevationProps {
   className?: string;
 }
 
-interface Palette {
-  ink: string;
-  alert: string;
-}
+type Palette = { ink: string } & Record<SubjectTone, string>;
 
 interface Runtime {
   ctx: CanvasRenderingContext2D | null;
@@ -377,6 +395,8 @@ interface Runtime {
   /** -1 forces the next frame to draw. */
   drawnYaw: number;
   drawnFlag: number;
+  /** The tone the subject was last stroked in; a change repaints. */
+  drawnTone: SubjectTone | null;
   drawnLift: number;
   drawnBoost: number;
   drawnW: number;
@@ -386,6 +406,7 @@ interface Runtime {
 export function WireframeElevation({
   data,
   damagedJoint,
+  subjectTone = "alert",
   channels,
   reducedMotion = false,
   onAnchorChange,
@@ -407,6 +428,7 @@ export function WireframeElevation({
     maxX: 0,
     drawnYaw: Number.NaN,
     drawnFlag: -2,
+    drawnTone: null,
     drawnLift: -2,
     drawnBoost: -1,
     drawnW: -1,
@@ -421,6 +443,7 @@ export function WireframeElevation({
   const palette = React.useRef<Palette>({
     ink: TOKEN_FALLBACK.machine["--ink"],
     alert: TOKEN_FALLBACK.machine["--alert"],
+    nominal: TOKEN_FALLBACK.machine["--nominal"],
   });
 
   // Everything the frame callback reads, held in refs: it subscribes once, on
@@ -445,6 +468,11 @@ export function WireframeElevation({
   );
   const flagRef = React.useRef(flagIndex);
   flagRef.current = flagIndex;
+  // Read per frame, like the flag itself: the loop holds no props, and a tone
+  // that arrives twenty seconds after mount must reach the next frame without
+  // tearing the subscription down.
+  const toneRef = React.useRef(subjectTone);
+  toneRef.current = subjectTone;
 
   /**
    * Which node the sweep is currently on, and when it landed.
@@ -480,9 +508,14 @@ export function WireframeElevation({
     rt.ctx = canvas.getContext("2d");
 
     const style = getComputedStyle(canvas);
+    // Both subject tones are sampled here, once, because the frame loop
+    // subscribes on mount and must never be rebuilt because a prop moved: the
+    // tone is chosen per frame from a palette that already holds both, rather
+    // than by re-reading a token the day the outcome lands.
     palette.current = {
       ink: readToken(style, "--ink", "machine"),
       alert: readToken(style, "--alert", "machine"),
+      nominal: readToken(style, "--nominal", "machine"),
     };
 
     const resize = (width: number, height: number) => {
@@ -529,6 +562,7 @@ export function WireframeElevation({
       }
 
       const flagged = flagRef.current;
+      const tone = toneRef.current;
       // The lift is a pre-flag courtesy; after it, the only tint is the module
       // that failed.
       let liftIndex = -1;
@@ -547,6 +581,7 @@ export function WireframeElevation({
       if (
         rt.yaw === rt.drawnYaw &&
         flagged === rt.drawnFlag &&
+        tone === rt.drawnTone &&
         liftIndex === rt.drawnLift &&
         liftBoost === rt.drawnBoost &&
         rt.w === rt.drawnW &&
@@ -556,6 +591,7 @@ export function WireframeElevation({
       }
       rt.drawnYaw = rt.yaw;
       rt.drawnFlag = flagged;
+      rt.drawnTone = tone;
       rt.drawnLift = liftIndex;
       rt.drawnBoost = liftBoost;
       rt.drawnW = rt.w;
@@ -566,6 +602,7 @@ export function WireframeElevation({
         model.current,
         palette.current,
         flagged,
+        tone,
         liftIndex,
         liftBoost,
         opts.current,
@@ -597,8 +634,13 @@ export function WireframeElevation({
     };
   }, []);
 
+  // The drawing's one sentence, and it follows the stroke. A reader told the
+  // module is "marked damaged" beside a conclusion announcing the channel
+  // restored is being handed the disagreement the picture no longer has.
   const label = damagedJoint
-    ? `Unit elevation from the chassis model, ${damagedJoint.replace("_", " ")} marked damaged`
+    ? `Unit elevation from the chassis model, ${damagedJoint.replace("_", " ")} marked ${
+        subjectTone === "nominal" ? "restored" : "damaged"
+      }`
     : "Unit elevation from the chassis model";
 
   /**
@@ -707,6 +749,7 @@ function draw(
   data: WireframeData,
   pal: Palette,
   flagged: number,
+  tone: SubjectTone,
   liftIndex: number,
   liftBoost: number,
   opts: { yawRad: number; viewport: { w: number; h: number }; margin: number },
@@ -817,8 +860,11 @@ function draw(
 
   rt.maxX = maxX;
   if (flagged >= 0) {
-    ctx.strokeStyle = pal.alert;
-    ctx.globalAlpha = ALPHA_ALERT;
+    // The subject's own token, chosen by the caller. The module is still drawn
+    // last and still ignores the ladder — being *restored* does not make it one
+    // of the fourteen things nobody looked at.
+    ctx.strokeStyle = pal[tone];
+    ctx.globalAlpha = ALPHA_SUBJECT;
     ctx.beginPath();
     path(ctx, fig.xy[flagged], rt);
     ctx.stroke();

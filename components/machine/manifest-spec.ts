@@ -26,7 +26,18 @@ import { type DiagSession } from "@/lib/stores";
  * are flipping.
  */
 
-export type ManifestState = "pending" | "operating" | "damaged";
+/**
+ * `restored` is the fourth state and the newest: a row that was stamped DAMAGED
+ * and whose channel the machine has since measured back inside its envelope.
+ *
+ * It is not folded into `operating`, and the distinction is the point. Fourteen
+ * rows on this board cleared because the scan checked them and they answered;
+ * this one cleared because a fault was found in it and then corrected. Printing
+ * both as OPERATING would leave the board with no memory of the only row the
+ * whole diagnostic was about — and would make the single most important state
+ * change on the surface look like the fourteen that were never in doubt.
+ */
+export type ManifestState = "pending" | "operating" | "damaged" | "restored";
 
 export interface ManifestRow {
   /** Uppercase wire-ish identifier, the row's display name. */
@@ -99,6 +110,19 @@ export function buildManifest(session: DiagSession | null): ManifestEntry[] {
   const walked = session?.walkLines ?? [];
   const channels = session?.channels ?? [];
   const flaggedJoint = session?.flag?.joint ?? null;
+  /**
+   * The board consumes the recalibration for the same reason it consumes the
+   * flag: both are the machine's own judgement about a channel, arriving on the
+   * same wire, and a manifest that took the first and ignored the second would
+   * hold a row stamped DAMAGED under a verdict card saying the channel is back.
+   *
+   * Same rule as everywhere else here — earned by an event, derived on every
+   * render, never latched. A session whose calibration is replayed after a
+   * reconnect produces exactly this board again; one that is aborted produces
+   * none of it.
+   */
+  const restoredJoint =
+    session?.calibration?.outcome === "cleared" ? session.calibration.joint : null;
 
   return MANIFEST_ROWS.map((row, i) => {
     const ordinal = i + 1;
@@ -108,7 +132,17 @@ export function buildManifest(session: DiagSession | null): ManifestEntry[] {
       // second-guess it from its own arithmetic, and the strip's colouring and
       // the log's RMS reading are the evidence beside it, not a rival verdict.
       if (flaggedJoint && row.joint === flaggedJoint) {
-        return { row, ordinal, state: "damaged" as const };
+        // …and the re-measure is the authoritative *un*-damage signal, on the
+        // one row it is about. The joint is checked rather than assumed: the
+        // store already refuses a calibration that is not about the standing
+        // verdict's joint, and a board that stamped RESTORED from a match it
+        // never made would be one edit away from clearing the wrong row.
+        return {
+          row,
+          ordinal,
+          state:
+            row.joint === restoredJoint ? ("restored" as const) : ("damaged" as const),
+        };
       }
       const measured = channels.some((c) => c.joint === row.joint);
       return {
@@ -132,6 +166,11 @@ export function buildManifest(session: DiagSession | null): ManifestEntry[] {
     const hit = row.path !== undefined && walked.includes(row.path);
     return { row, ordinal, state: hit ? ("operating" as const) : ("pending" as const) };
   });
+}
+
+/** The row the board's leader line points at: the scan's subject, whatever became of it. */
+export function subjectRowState(state: ManifestState): boolean {
+  return state === "damaged" || state === "restored";
 }
 
 /** How many rows have cleared — the panel header's count. */

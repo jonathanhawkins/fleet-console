@@ -46,9 +46,21 @@ const TONE_STROKE: Record<ChannelTone, string> = {
 
 /** The same three slots as text, for the reading under the trace. */
 const TONE_TEXT: Record<ChannelTone, string> = {
-  nominal: "text-ink",
+  nominal: "text-nominal",
   warn: "text-warn",
   alert: "text-alert",
+};
+
+/**
+ * …and as a frame. The subject's border is the exhibit's own claim about the
+ * channel inside it, so once the channel has been measured again the frame has
+ * to follow the measurement: a red box around a trace that is back inside its
+ * envelope is the loudest wrong thing on the card.
+ */
+const TONE_BORDER: Record<ChannelTone, string> = {
+  nominal: "border-nominal/60",
+  warn: "border-warn/60",
+  alert: "border-alert/60",
 };
 
 const VIEW = { w: 240, h: 64 };
@@ -101,27 +113,50 @@ export function EvidenceTrace({
   const postDelta = post ? rmsDelta(post, ref) : null;
   const postGain = post ? gainRatio(post, ref) : null;
   const postTone = postDelta === null ? null : channelTone(postDelta);
+  /**
+   * What this figure currently claims about its channel.
+   *
+   * The subject frames and labels itself in alert because the subject is what
+   * is wrong — until it is measured again, at which point the exhibit's own
+   * tone is the tone of the newest measurement, exactly as the trace inside it
+   * already was. A figure whose frame and caption disagree with the line they
+   * are drawn around is a figure arguing with its own evidence.
+   */
+  const claim: ChannelTone | null = postTone ?? (subject ? "alert" : null);
 
   return (
     <figure
       data-evidence={joint}
+      data-tone={claim ?? "control"}
       className={cn(
         "flex min-w-0 flex-col gap-1 border p-2",
-        subject ? "border-alert/60" : "border-line",
+        claim ? TONE_BORDER[claim] : "border-line",
         className,
       )}
     >
       <figcaption className="flex items-baseline justify-between gap-3 text-label uppercase">
-        <span className={subject ? "text-alert" : "text-ink-soft"}>
+        <span className={claim ? TONE_TEXT[claim] : "text-ink-soft"}>
           {machineJoint(joint)}
         </span>
-        {/* "Subject · recalibrated" wrapped to two lines in a figure this
-            narrow, and the red frame already says which one is the subject —
-            so once there is a re-measure, the caption spends its width on the
-            fact that is new. */}
-        <span className="tnum text-ink-muted">
-          {subject ? (post ? "Recalibrated" : "Subject") : "Control"}
-        </span>
+        {/* Two traces in one frame need a key, and this is it: the two words
+            printed in the two lines' own tones, in the order the lines were
+            measured in. It replaced the single word "RECALIBRATED", which named
+            the event but left the reader to work out which of the two lines was
+            the result of it — on the one figure whose entire argument is *this
+            came down from that*. BEFORE is dimmed to the same 35% the ghost
+            trace is drawn at, so the key and the drawing are the same object
+            twice. */}
+        {post && postTone ? (
+          <span className="flex items-baseline gap-1 tnum">
+            <span className={cn(TONE_TEXT[tone], "opacity-40")}>Before</span>
+            <span aria-hidden className="text-ink-muted">
+              ·
+            </span>
+            <span className={TONE_TEXT[postTone]}>After</span>
+          </span>
+        ) : (
+          <span className="tnum text-ink-muted">{subject ? "Subject" : "Control"}</span>
+        )}
       </figcaption>
 
       <svg
@@ -196,12 +231,7 @@ export function EvidenceTrace({
               measurement, exactly as the trace above it does: a re-measure that
               came back inside the envelope printed in red would be the figure
               disagreeing with the line it is a caption for. */}
-          <span
-            className={cn(
-              "tnum",
-              postTone ? TONE_TEXT[postTone] : subject ? "text-alert" : "text-ink-soft",
-            )}
-          >
+          <span className={cn("tnum", claim ? TONE_TEXT[claim] : "text-ink-soft")}>
             {(postGain ?? gain).toFixed(2)}× ref
           </span>
         </div>

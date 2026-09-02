@@ -425,7 +425,7 @@ const CLEAN: VerdictReport = {
   recommendations: [],
 };
 
-function diagnose(report: VerdictReport) {
+function diagnose(report: VerdictReport, outcome?: "partial" | "cleared") {
   act(() => {
     const incident = useIncidentStore.getState();
     incident.beginDescent("N-07");
@@ -435,9 +435,67 @@ function diagnose(report: VerdictReport) {
       unitId: "N-07",
       ev: { k: "verdict", report },
     });
+    if (outcome) {
+      incident.applyDiagEvent({
+        t: "diag_event",
+        unitId: "N-07",
+        ev: {
+          k: "recalibration",
+          joint: report.joint,
+          wave: [0, 0.5, 0, -0.5],
+          ref: [0, 0.5, 0, -0.5],
+          outcome,
+        },
+      });
+    }
     incident.completeAscent();
   });
 }
+
+/**
+ * The half of the recalibration act that happens back in operator space.
+ *
+ * The instrument's cleared register is machine-space's business; this is what
+ * the operator sees on ascent, and it was the last surface still saying
+ * "service recommended" about a unit whose fault had been corrected over the
+ * link ten seconds earlier. A banner that recommends a van for a robot the
+ * console just fixed is the console arguing with its own record.
+ */
+describe("IncidentBanner — after a recalibration", () => {
+  it("reports a cleared fault as cleared, and drops the amber with it", () => {
+    seed("amber");
+    raise("amber", "Sagebrush House: left knee actuator running hot");
+    diagnose(REPORT, "cleared");
+    render(<IncidentBanner unitId="N-07" />);
+
+    expect(screen.getByText("Diagnostic complete — fault cleared")).toBeVisible();
+    expect(screen.queryByText(/service recommended/i)).not.toBeInTheDocument();
+    // The scan's finding is still stated — a treatment does not unwrite a
+    // diagnosis — with the outcome as its own sentence beside it.
+    expect(
+      screen.getByText(
+        "Left knee actuator A-07: gain anomaly. Cleared by recalibration.",
+      ),
+    ).toBeVisible();
+    // …and the surface stops being one of the loud ones.
+    const banner = document.querySelector('[data-slot="incident-banner"]');
+    expect(banner).toHaveAttribute("data-status", "nominal");
+  });
+
+  it("leaves a partial correction amber and still recommending service", () => {
+    seed("amber");
+    raise("amber", "Sagebrush House: left knee actuator running hot");
+    diagnose(REPORT, "partial");
+    render(<IncidentBanner unitId="N-07" />);
+
+    expect(screen.getByText("Diagnostic complete — service recommended")).toBeVisible();
+    expect(
+      screen.getByText("Left knee actuator A-07: gain anomaly. Recalibration partial."),
+    ).toBeVisible();
+    const banner = document.querySelector('[data-slot="incident-banner"]');
+    expect(banner).toHaveAttribute("data-status", "warn");
+  });
+});
 
 describe("IncidentBanner — alert lifecycle", () => {
   it("carries the ack taken in the fleet feed onto the unit's own page", () => {

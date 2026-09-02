@@ -15,7 +15,7 @@ import {
   sessionTag,
   type ScanProgress,
 } from "./scan-copy";
-import { type ScanLink } from "./scan-state";
+import { useCalibrationOutcome, type ScanLink } from "./scan-state";
 
 /**
  * Who is being scanned, for how long, and in what state — the title block the
@@ -31,6 +31,11 @@ import { type ScanLink } from "./scan-state";
 const STATE_MARK: Record<string, string> = {
   SCANNING: "bg-nominal",
   VERDICT: "bg-warn",
+  // The one state on this rule that is good news, and it takes the same square
+  // the scan took while everything was still fine. Amber here would be a
+  // warning about a channel the machine has just measured back inside its
+  // envelope — the header contradicting the board under it.
+  CLEARED: "bg-nominal",
   HOLD: "bg-alert",
 };
 
@@ -73,7 +78,10 @@ export function ScanHeader({
   const elapsed = now > 0 ? now - startedAt : 0;
 
   const tag = React.useMemo(() => sessionTag(unitId, startedAt), [unitId, startedAt]);
-  const word = scanPhaseWord(link, phase);
+  // Read here rather than passed in: the phase chip is a projection of the
+  // session like every other panel on this surface (scan-state.ts).
+  const outcome = useCalibrationOutcome();
+  const word = scanPhaseWord(link, phase, outcome === "cleared");
 
   return (
     // The top of a surface that is `fixed inset-0`, so it is the app and not
@@ -199,6 +207,7 @@ export function ScanStatusBar({
     channels: session?.channels.length ?? 0,
     flagged: session?.flag != null,
     hasVerdict: session?.report != null,
+    cleared: session?.calibration?.outcome === "cleared",
   };
 
   const line = scanStatusLine(progress, link, phase);

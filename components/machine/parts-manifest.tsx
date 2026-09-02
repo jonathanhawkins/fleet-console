@@ -4,6 +4,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import {
   MANIFEST_GROUP_LABEL,
+  subjectRowState,
   type ManifestEntry,
   type ManifestGroup,
   type ManifestState,
@@ -32,23 +33,39 @@ const CHIP: Record<ManifestState, string> = {
   operating: "bg-nominal-tint text-nominal",
   // Inverted: a stamp, not a label.
   damaged: "bg-alert text-bg",
+  // Also a stamp, and deliberately the *same* stamp in the other hue. This row
+  // was the one inverted block on a fifteen-row board; after the re-measure it
+  // is still the one inverted block, and it has gone from red to phosphor. The
+  // eye that found the damage by its weight finds the resolution in the same
+  // place by the same weight — which is what makes this a state change of the
+  // board rather than a line of small type somewhere else on the screen.
+  restored: "bg-nominal text-bg",
   pending: "text-ink-muted",
 };
 
 const CHIP_COPY: Record<ManifestState, string> = {
   operating: "Operating",
   damaged: "Damaged",
+  restored: "Restored",
   pending: "Pending",
 };
 
 export interface PartsManifestProps {
   entries: ManifestEntry[];
-  /** Ref onto the damaged row, so the board can run a leader line to it. */
-  damagedRowRef?: React.Ref<HTMLDivElement>;
+  /**
+   * Ref onto the scan's subject, so the board can run a leader line to it.
+   *
+   * The subject, not "the damaged row": the leader line says *this module and
+   * that row are the same thing*, which stays true after the fault on it has
+   * been corrected. Dropping the line the moment the row turned RESTORED would
+   * cut the drawing loose from the inventory at exactly the moment the two of
+   * them have something new to agree about.
+   */
+  subjectRowRef?: React.Ref<HTMLDivElement>;
   className?: string;
 }
 
-export function PartsManifest({ entries, damagedRowRef, className }: PartsManifestProps) {
+export function PartsManifest({ entries, subjectRowRef, className }: PartsManifestProps) {
   let lastGroup: ManifestGroup | null = null;
 
   return (
@@ -67,7 +84,7 @@ export function PartsManifest({ entries, damagedRowRef, className }: PartsManife
             ) : null}
             <ManifestRowView
               entry={entry}
-              rowRef={entry.state === "damaged" ? damagedRowRef : undefined}
+              rowRef={subjectRowState(entry.state) ? subjectRowRef : undefined}
             />
           </React.Fragment>
         );
@@ -101,7 +118,13 @@ function ManifestRowView({
       <span aria-hidden className="shrink-0 text-ink-muted">
         —
       </span>
-      <span className={cn("shrink-0", state === "damaged" && "text-alert")}>
+      <span
+        className={cn(
+          "shrink-0",
+          state === "damaged" && "text-alert",
+          state === "restored" && "text-nominal",
+        )}
+      >
         {row.id}
       </span>
       {row.tag ? <span className="shrink-0 tnum text-ink-muted">{row.tag}</span> : null}

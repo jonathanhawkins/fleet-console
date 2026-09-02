@@ -1,4 +1,25 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
+
+/**
+ * The rendered colour of a token, resolved in the same element's context.
+ *
+ * Machine space's palette is CSS variables on `[data-space="machine"]`, so
+ * "is this line alert red or phosphor" cannot be asked of a class name — a
+ * class name is what the component *believes*. This paints the token onto a
+ * throwaway span inside the element under test and reads back what the browser
+ * actually computed, which is the only form of the question that can fail when
+ * the token ladder moves.
+ */
+async function tokenColor(el: Locator, token: string): Promise<string> {
+  return el.evaluate((node, name) => {
+    const probe = document.createElement("span");
+    probe.style.color = getComputedStyle(node).getPropertyValue(name).trim();
+    node.appendChild(probe);
+    const out = getComputedStyle(probe).color;
+    probe.remove();
+    return out;
+  }, token);
+}
 
 /**
  * the branch the golden path deliberately does not take.
@@ -90,11 +111,43 @@ test("verdict → safe sit → recalibrate → partial result on the evidence", 
 
   // …and the conclusion amends rather than moves: the scan still found a gain
   // anomaly, and what is left of it is now mechanical.
+  const partialHeadline = overlay.getByRole("heading", {
+    name: "KNEE_L · ACTUATOR A-07",
+  });
+  await expect(partialHeadline).toBeVisible();
+  // The outcome rides on the anomaly line, and PARTIAL is amber against an
+  // anomaly still in alert: two facts, two tones, one line.
+  const partialAnomaly = overlay.locator('[data-slot="verdict-anomaly"]');
+  await expect(partialAnomaly).toHaveText(/^GAIN ANOMALY · PARTIAL$/i);
   await expect(
-    overlay.getByRole("heading", { name: "KNEE_L · ACTUATOR A-07" }),
+    overlay.getByText(/^RESIDUAL 1\.\d\d× REFERENCE · MECHANICAL WEAR/),
   ).toBeVisible();
-  await expect(overlay.getByText(/^PARTIAL · RESIDUAL/)).toBeVisible();
   await expect(overlay.getByText(/GAIN DRIFT EXCLUDED · REMAINING/)).toBeVisible();
+
+  // The register the cleared branch below is measured against. A partial stays
+  // loud: the headline is alert red, the exhibit is still framed in alert, and
+  // the session header's phase chip is still the amber VERDICT.
+  const partialCard = overlay.locator('[data-slot="verdict-card"]');
+  await expect(partialCard).toHaveAttribute("data-outcome", "partial");
+  // The elevation stays red with the fault: same drawing, opposite reading.
+  await expect(
+    overlay.getByRole("img", { name: /knee L marked damaged/i }),
+  ).toBeVisible();
+  // The frame follows the measurement, not the fact that a maneuver ran: the
+  // scripted partial lands the channel in the warn band (sim/engine/faults.ts
+  // holds that as a contract), so the exhibit steps down one tier and stops
+  // there. What it must never do here is reach nominal.
+  await expect(overlay.locator('[data-evidence="knee_L"]')).toHaveAttribute(
+    "data-tone",
+    "warn",
+  );
+  await expect(overlay.getByText(/^VERDICT$/)).toBeVisible();
+  // The tone, read off the browser rather than off a class name. The cleared
+  // walk below makes the mirror-image assertion, and between them the two
+  // outcomes are pinned to be told apart at a glance.
+  const partialColor = await partialHeadline.evaluate((el) => getComputedStyle(el).color);
+  expect(partialColor).toBe(await tokenColor(partialHeadline, "--alert"));
+  expect(partialColor).not.toBe(await tokenColor(partialHeadline, "--nominal"));
 
   // --- Dispatch is now the earned next step, and still only files ------------
   const dispatch = overlay.getByRole("button", { name: /^Dispatch service$/i });
@@ -214,12 +267,76 @@ test("offset verdict → safe sit → recalibrate → cleared, and the ladder st
   await expect(subject).toContainText(/WAS 0\.2\d\d/i);
   await expect(subject).toContainText(/RMS Δ 0\.0\d\d/i);
 
+  // --- The register of the whole board changes, not one line of it ----------
   // The conclusion amends without moving: the scan still found an offset on
   // ANKLE_R, and what is left of it is nothing.
+  const headline = overlay.getByRole("heading", { name: "ANKLE_R · ACTUATOR A-12" });
+  await expect(headline).toBeVisible();
+  await expect(overlay.locator('[data-slot="verdict-card"]')).toHaveAttribute(
+    "data-outcome",
+    "cleared",
+  );
+  // The loudest object in machine space is no longer red — the mirror image of
+  // the partial walk's assertion above, and the claim this whole change exists
+  // to make. Read off the browser, not off a class name.
+  const clearedColor = await headline.evaluate((el) => getComputedStyle(el).color);
+  expect(clearedColor).toBe(await tokenColor(headline, "--nominal"));
+  expect(clearedColor).not.toBe(await tokenColor(headline, "--alert"));
+
+  // The anomaly line carries the outcome, and the summary is dated rather than
+  // left standing in the present tense over a measurement that has moved.
+  await expect(overlay.locator('[data-slot="verdict-anomaly"]')).toHaveText(
+    /^OFFSET ANOMALY · CLEARED$/i,
+  );
+  await expect(overlay.getByText(/^At scan · RIGHT ANKLE ACTUATOR A-12/i)).toBeVisible();
   await expect(
-    overlay.getByRole("heading", { name: "ANKLE_R · ACTUATOR A-12" }),
+    overlay.getByText(/RE-MEASURED AFTER CALIBRATION: CHANNEL WITHIN REFERENCE/),
   ).toBeVisible();
-  await expect(overlay.getByText(/^CLEARED · CHANNEL RESTORED · RESIDUAL/)).toBeVisible();
+  await expect(overlay.getByText(/CHANNEL RESTORED · RESIDUAL/)).toBeVisible();
+
+  // The exhibit's frame follows the measurement inside it…
+  await expect(subject).toHaveAttribute("data-tone", "nominal");
+  await expect(subject.getByText(/^BEFORE$/i)).toBeVisible();
+  await expect(subject.getByText(/^AFTER$/i)).toBeVisible();
+
+  // …the board's one inverted stamp goes from red DAMAGED to phosphor RESTORED…
+  await expect(overlay.locator('[data-row="ANKLE_R"]')).toHaveAttribute(
+    "data-state",
+    "restored",
+  );
+  await expect(overlay.locator('[data-row="ANKLE_R"]')).toContainText(/RESTORED/i);
+
+  // …the drawing beside the inventory stops marking the limb damaged, which is
+  // the one claim on the board a canvas cannot be asked for in pixels…
+  await expect(
+    overlay.getByRole("img", { name: /ankle R marked restored/i }),
+  ).toBeVisible();
+  await expect(overlay.getByRole("img", { name: /ankle R marked damaged/i })).toHaveCount(
+    0,
+  );
+
+  // …the session header's phase chip reads the resolution rather than amber
+  // VERDICT, which is exactly what tells this state apart from the partial one…
+  await expect(overlay.getByText(/^CLEARED$/)).toBeVisible();
+  await expect(overlay.getByText(/^VERDICT$/)).toHaveCount(0);
+
+  // …and the footer agrees with all of it.
+  await expect(
+    overlay.getByText(/SCAN COMPLETE · \d\d CHANNELS · 01 ANOMALY CLEARED/),
+  ).toBeVisible();
+
+  // The escalation is no longer offered as if it were needed. It is not hidden
+  // — the report recommended it — it is inert, with the reason on the label.
+  const notIndicated = overlay.getByRole("button", {
+    name: /^Dispatch service · NOT INDICATED$/i,
+  });
+  await expect(notIndicated).toBeDisabled();
+  await expect(
+    overlay.getByText(/^CHANNEL RESTORED · ESCALATION NO LONGER INDICATED$/i),
+  ).toBeVisible();
+
+  // The receipts stay: they are the audit of what was done to the robot.
+  await expect(overlay.getByText("RECALIBRATION COMPLETE").first()).toBeVisible();
 
   // --- Ascent: the report files it at rung two, and stops there --------------
   await overlay.getByRole("button", { name: /return to console/i }).click();

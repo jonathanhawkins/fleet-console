@@ -373,3 +373,57 @@
     display: none;
   }
 }
+
+/* THE RESOLUTION SWEEP (verdict-card.tsx) — the board's acknowledgement that
+   the machine's re-measure came back clean.
+
+   One luminance wash, left to right, once, and then it is gone. The card has
+   already changed register by the time this plays — headline, anomaly line,
+   exhibit frame and manifest stamp all flipped in the same commit — so the
+   sweep is not carrying the message; it is the thing that makes an operator
+   looking at the traces two panels away glance back at the card that changed.
+   No travel, no scale, no bounce, no colour that is not already a token: an
+   instrument states outcomes, and a board that congratulated itself would stop
+   being one.
+
+   ~480 ms, deliberately outside the 120–180 ms micro band, because this is not
+   a state transition an operator caused half a second ago — it is a report
+   arriving from a robot, and it has to be catchable by an eye that was not
+   pointed at it. `both` matters: the fill holds the end frame, so under the
+   reduced-motion clamp (app/styles/motion.css collapses it to 0.01ms) the wash
+   is simply never seen and the card is already in its cleared register, which
+   is the whole message anyway. */
+@layer components {
+  .verdict-resolve-sweep {
+    position: relative;
+  }
+
+  .verdict-resolve-sweep::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-repeat: no-repeat;
+    background-size: 220% 100%;
+    background-image: linear-gradient(
+      100deg,
+      transparent 42%,
+      color-mix(in srgb, var(--nominal) 14%, transparent) 50%,
+      transparent 58%
+    );
+    animation: verdict-resolve-sweep 480ms var(--ease-console) 1 both;
+  }
+
+  @keyframes verdict-resolve-sweep {
+    from {
+      background-position: -120% 0;
+      opacity: 1;
+    }
+
+    to {
+      background-position: 220% 0;
+      opacity: 0;
+    }
+  }
+}

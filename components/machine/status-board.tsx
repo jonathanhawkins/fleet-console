@@ -4,6 +4,7 @@ import * as React from "react";
 import { usePrefersReducedMotion } from "@/components/console";
 import { buildManifest } from "./manifest-spec";
 import { PartsManifest } from "./parts-manifest";
+import { isRestored } from "./recalibrate-copy";
 import { machineComponent, machineJoint } from "./scan-copy";
 import { useDiagSession, useStackedScan } from "./scan-state";
 import { UnitSilhouette } from "./unit-silhouette";
@@ -62,6 +63,19 @@ export function StatusBoard() {
   const session = useDiagSession();
   const entries = React.useMemo(() => buildManifest(session), [session]);
   const flag = session?.flag ?? null;
+  /**
+   * Has the machine's own re-measure put the subject back inside its envelope?
+   *
+   * The same predicate the verdict card and the manifest projection read
+   * (recalibrate-copy.ts), narrowed to the joint this drawing is actually
+   * about — the drawing marks *one* module, and a calibration of some other
+   * joint must not retone it. It answers for the elevation's stroke, for the
+   * spoken summary and for the manifest row alike, so the picture, the
+   * inventory and the screen reader cannot end up telling three stories.
+   */
+  const calibration = session?.calibration ?? null;
+  const restored = isRestored(calibration) && calibration?.joint === flag?.joint;
+  const subjectTone = restored ? "nominal" : "alert";
   const reducedMotion = usePrefersReducedMotion();
   const stacked = useStackedScan();
   const model = useWireframeModel();
@@ -222,13 +236,18 @@ export function StatusBoard() {
               <WireframeElevation
                 data={model}
                 damagedJoint={flag?.joint ?? null}
+                subjectTone={subjectTone}
                 channels={session?.channels}
                 reducedMotion={reducedMotion}
                 onAnchorChange={handleAnchor}
                 className="size-full"
               />
             ) : (
-              <UnitSilhouette damagedJoint={flag?.joint ?? null} markRef={markRef} />
+              <UnitSilhouette
+                damagedJoint={flag?.joint ?? null}
+                subjectTone={subjectTone}
+                markRef={markRef}
+              />
             )}
           </div>
           {/* One label, and it changes when the drawing does: the hand-drawn
@@ -251,7 +270,7 @@ export function StatusBoard() {
 
       <PartsManifest
         entries={entries}
-        damagedRowRef={rowRef}
+        subjectRowRef={rowRef}
         className="max-w-[46rem] flex-1 self-start"
       />
 
@@ -281,10 +300,18 @@ export function StatusBoard() {
         </svg>
       ) : null}
 
-      {/* The board's own summary, for a reader who cannot see the chips. */}
+      {/* The board's own summary, for a reader who cannot see the chips — and
+          it follows the chips, including the one that changed after the scan
+          ended. A screen reader told "ANKLE_R ACTUATOR A-12 damaged" beside a
+          verdict card announcing the channel restored is being handed the
+          disagreement the sighted board no longer has. */}
       <p className="sr-only">
         {flag
-          ? `${machineJoint(flag.joint)} ${machineComponent(flag.component)} damaged; all other checked components operating.`
+          ? `${machineJoint(flag.joint)} ${machineComponent(flag.component)} ${
+              restored
+                ? "restored: channel re-measured within reference after recalibration"
+                : "damaged"
+            }; all other checked components operating.`
           : `${entries.filter((e) => e.state === "operating").length} of ${entries.length} components checked and operating.`}
       </p>
     </div>

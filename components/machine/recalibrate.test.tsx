@@ -327,9 +327,9 @@ describe("the result lands on the evidence", () => {
     // Two live traces in one frame: the ghost of what it was, and what it is.
     expect(exhibit.querySelector('[data-role="pre"]')).not.toBeNull();
     expect(exhibit.querySelector('[data-role="live"]')).not.toBeNull();
-    expect(
-      within(exhibit as HTMLElement).getByText(/^recalibrated$/i),
-    ).toBeInTheDocument();
+    // The key that names them: two words in the two lines' own tones.
+    expect(within(exhibit as HTMLElement).getByText(/^before$/i)).toBeInTheDocument();
+    expect(within(exhibit as HTMLElement).getByText(/^after$/i)).toBeInTheDocument();
     // Both readings move together or neither does.
     // Current reading in the primary row, what it came down from under it.
     expect(within(exhibit as HTMLElement).getByText(/1\.32× ref/i)).toBeInTheDocument();
@@ -357,7 +357,11 @@ describe("the result lands on the evidence", () => {
     // by a treatment.
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent(/knee_l/i);
     expect(screen.getAllByText(/gain anomaly/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/^PARTIAL · RESIDUAL 1\.32× REFERENCE/)).toBeInTheDocument();
+    // The outcome word rides on the anomaly line now; the amendment under it is
+    // the measurement and what it leaves behind, stated once each.
+    expect(
+      screen.getByText(/^RESIDUAL 1\.32× REFERENCE · MECHANICAL WEAR INDICATED$/),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         /GAIN DRIFT EXCLUDED · REMAINING TENDON WEAR · ACTUATOR DEGRADATION/,
@@ -382,6 +386,138 @@ describe("the result lands on the evidence", () => {
     expect(
       container.querySelector('[data-evidence="knee_L"] [data-role="pre"]'),
     ).toBeNull();
+  });
+});
+
+/**
+ * The other ending, and the reason the two must not look alike.
+ *
+ * The knee's partial correction is a warning with a van attached; the ankle's
+ * cleared one is a fault that stopped existing. Both used to render as the same
+ * card with one line different — full alert headline, present-tense summary,
+ * red-framed exhibit, DISPATCH SERVICE still on offer — which meant the console
+ * put a robot that had just been fixed on a screen that still read as an
+ * emergency. Everything below is the register changing together.
+ */
+describe("a cleared re-measure changes the register of the whole card", () => {
+  const offsetReport: VerdictReport = {
+    unitId: "N-07",
+    joint: "ankle_R",
+    component: "actuator_A12",
+    anomaly: "offset",
+    summary: "RIGHT ANKLE ACTUATOR A-12: OFFSET ANOMALY. LIVE TRACE DISPLACED 0.21.",
+    recommendations: ["Recalibrate joint", "Command safe sit", "Dispatch service"],
+    ts: 120_000,
+  };
+  /** Displaced from datum, then re-zeroed onto it. */
+  const displaced = ref.map((v) => v + 0.21);
+
+  const cleared = (over: Partial<DiagSession> = {}): DiagSession =>
+    session({
+      channels: [
+        { joint: "ankle_R", ref, wave: displaced },
+        { joint: "ankle_L", ref, wave: ref.map((v) => v * 1.01) },
+      ],
+      flag: { k: "flag", joint: "ankle_R", component: "actuator_A12", anomaly: "offset" },
+      report: offsetReport,
+      calibration: calibration({ joint: "ankle_R", wave: ref, outcome: "cleared" }),
+      ...over,
+    });
+
+  it("takes the alert off the headline and puts the outcome on the finding", () => {
+    seedPosture("sitting");
+    const { container } = render(<VerdictCard session={cleared()} />);
+
+    const h2 = screen.getByRole("heading", { level: 2 });
+    // The part is still named: a diagnosis is not rewritten by a treatment.
+    expect(h2).toHaveTextContent("ANKLE_R · ACTUATOR A-12");
+    // …but the loudest object in machine space is no longer red.
+    expect(h2.className).toContain("text-nominal");
+    expect(h2.className).not.toContain("text-alert");
+
+    const anomaly = container.querySelector('[data-slot="verdict-anomaly"]');
+    expect(anomaly).toHaveTextContent(/^offset anomaly · cleared$/i);
+    expect(anomaly?.className).toContain("text-nominal");
+    expect(anomaly?.className).not.toContain("text-alert");
+    // The card says so by name, for the stylesheet and for a reader.
+    expect(container.querySelector('[data-slot="verdict-card"]')).toHaveAttribute(
+      "data-outcome",
+      "cleared",
+    );
+  });
+
+  it("dates the scan's own sentence and prints the one that is true now", () => {
+    seedPosture("sitting");
+    render(<VerdictCard session={cleared()} />);
+
+    // The report's present-tense summary survives, marked as history.
+    expect(screen.getByText(/At scan/i)).toBeInTheDocument();
+    expect(screen.getByText(/LIVE TRACE DISPLACED 0\.21/)).toBeInTheDocument();
+    // And what replaced it as the card's standing claim.
+    expect(
+      screen.getByText(/^RE-MEASURED AFTER CALIBRATION: CHANNEL WITHIN REFERENCE/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/CHANNEL RESTORED · RESIDUAL/)).toBeInTheDocument();
+  });
+
+  it("retones the exhibit to the measurement inside it", () => {
+    seedPosture("sitting");
+    const { container } = render(<VerdictCard session={cleared()} />);
+    const exhibit = container.querySelector('[data-evidence="ankle_R"]')!;
+
+    // The frame is the figure's own claim about its channel, and the channel is
+    // back inside the envelope.
+    expect(exhibit.getAttribute("data-tone")).toBe("nominal");
+    expect(exhibit.className).toContain("border-nominal/60");
+    expect(exhibit.className).not.toContain("border-alert");
+    // Both traces are still there, and both are named.
+    expect(exhibit.querySelector('[data-role="pre"]')).not.toBeNull();
+    expect(exhibit.querySelector('[data-role="live"]')).not.toBeNull();
+    expect(within(exhibit as HTMLElement).getByText(/^before$/i)).toBeInTheDocument();
+    expect(within(exhibit as HTMLElement).getByText(/^after$/i)).toBeInTheDocument();
+  });
+
+  it("keeps the exhibit in alert while the correction is only partial", () => {
+    seedPosture("sitting");
+    const { container } = render(
+      <VerdictCard session={session({ calibration: calibration() })} />,
+    );
+    const exhibit = container.querySelector('[data-evidence="knee_L"]')!;
+    // The frame follows the number, not the fact that a maneuver ran: a channel
+    // still outside its envelope keeps a frame that says so. Which of the two
+    // loud tiers it lands in is the measurement's business (the scripted
+    // partial lands in warn); what it must never reach here is nominal.
+    expect(exhibit.getAttribute("data-tone")).not.toBe("nominal");
+  });
+
+  it("stops offering the escalation the clear made unnecessary", () => {
+    seedPosture("sitting");
+    render(<VerdictCard session={cleared()} />);
+
+    const dispatch = screen.getByRole("button", {
+      name: /^Dispatch service · NOT INDICATED$/i,
+    });
+    expect(dispatch).toBeDisabled();
+    expect(
+      screen.getByText(/^Channel restored · escalation no longer indicated$/i),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves DISPATCH SERVICE live and pressable after a partial", () => {
+    seedPosture("sitting");
+    render(<VerdictCard session={session({ calibration: calibration() })} />);
+    expect(screen.getByRole("button", { name: /^Dispatch service$/i })).toBeEnabled();
+    expect(screen.queryByText(/escalation no longer indicated/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps a record that was already taken, gate or no gate", () => {
+    seedPosture("sitting");
+    render(<VerdictCard session={cleared({ acknowledged: ["Dispatch service"] })} />);
+    // The audit outranks the gate: a press that happened cannot un-happen.
+    expect(
+      screen.getByRole("button", { name: /^Dispatch service · recorded/i }),
+    ).toBeDisabled();
+    expect(screen.queryByText(/NOT INDICATED/i)).not.toBeInTheDocument();
   });
 });
 
@@ -447,10 +583,10 @@ describe("recalibrate-copy", () => {
   it("states the residual in the machine's register", () => {
     const ratio = residualReading("gain", [1.3241], [1]);
     expect(calibrationAmendment("partial", ratio)).toBe(
-      "PARTIAL · RESIDUAL 1.32× REFERENCE · MECHANICAL WEAR INDICATED",
+      "RESIDUAL 1.32× REFERENCE · MECHANICAL WEAR INDICATED",
     );
     expect(calibrationAmendment("cleared", ratio)).toBe(
-      "CLEARED · CHANNEL RESTORED · RESIDUAL 1.32× REFERENCE",
+      "CHANNEL RESTORED · RESIDUAL 1.32× REFERENCE",
     );
   });
 

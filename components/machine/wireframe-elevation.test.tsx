@@ -196,6 +196,45 @@ function toFlag(): void {
   });
 }
 
+/**
+ * …and on to the ending the board has to be able to draw: a standing verdict,
+ * then the machine's own re-measure saying the channel came back.
+ */
+function toCleared(): void {
+  const ev = (e: DiagEventMessage["ev"]): DiagEventMessage => ({
+    t: "diag_event",
+    unitId: "N-07",
+    ev: e,
+  });
+  toFlag();
+  act(() => {
+    const s = useIncidentStore.getState();
+    s.applyDiagEvent(
+      ev({
+        k: "verdict",
+        report: {
+          unitId: "N-07",
+          joint: "knee_L",
+          component: "actuator_A07",
+          anomaly: "gain",
+          summary: "LEFT KNEE ACTUATOR A-07: GAIN ANOMALY.",
+          recommendations: ["Recalibrate joint"],
+          ts: 120_000,
+        },
+      }),
+    );
+    s.applyDiagEvent(
+      ev({
+        k: "recalibration",
+        joint: "knee_L",
+        wave: [0, 0.5, 0, -0.5],
+        ref: [0, 0.5, 0, -0.5],
+        outcome: "cleared",
+      }),
+    );
+  });
+}
+
 // ---------------------------------------------------------------------------
 
 describe("nodeNameForJoint", () => {
@@ -257,6 +296,20 @@ describe("segmentsBoxCenter", () => {
 const inkPasses = (passes: Pass[]): Pass[] =>
   passes.filter((p) => p.style !== ALERT_STYLE);
 const ALERT_STYLE = TOKEN_FALLBACK.machine["--alert"]; // what --alert falls back to under jsdom
+const NOMINAL_STYLE = TOKEN_FALLBACK.machine["--nominal"];
+
+/**
+ * The subject's pass, by the one property no ladder tier can wear.
+ *
+ * Under jsdom `--nominal` and `--ink` fall back to the same phosphor, so once
+ * the subject is drawn in nominal its *colour* no longer tells it apart from
+ * the fourteen modules around it. Its alpha still does: the ladder tops out at
+ * ALPHA_CONTOUR (0.72) and the subject is stroked at 0.95, because it defers to
+ * nothing whichever tone it is wearing.
+ */
+const SUBJECT_ALPHA = 0.95;
+const subjectPass = (passes: Pass[]): Pass | undefined =>
+  passes.filter((p) => p.alpha === SUBJECT_ALPHA).at(-1);
 
 describe("WireframeElevation drawing", () => {
   it("draws the figure as a rising luminance ladder, dimmest tier first", () => {
@@ -349,6 +402,109 @@ describe("WireframeElevation drawing", () => {
     const alphas = new Set(alerts.map((p) => p.alpha));
     expect(alphas.size).toBe(1); // one alpha, forever
     expect(alerts.every((p) => p.segments === kneeEdges)).toBe(true);
+  });
+
+  /**
+   * The subject's tone is a fact about the diagnosis, not about the drawing.
+   *
+   * The flag paints the module red and that is the frame the whole descent is
+   * built toward — but once the machine's own re-measure has put the channel
+   * back inside its envelope, a red limb is the last surface on the board still
+   * reporting a fault nobody has. The module stays the subject either way: last
+   * pass, above every tier, whole.
+   */
+  it("draws the subject in nominal once the tone says the channel came back", () => {
+    const rec = recordingContext();
+    recorder = rec;
+    const kneeEdges = MODEL.byName.get("knee_actuator_L")!.edgeCount;
+
+    render(
+      <WireframeElevation data={MODEL} damagedJoint="knee_L" subjectTone="nominal" />,
+    );
+    frame(1000);
+
+    const subject = subjectPass(rec.passes)!;
+    expect(subject).toBeDefined();
+    // The claim: not red any more.
+    expect(subject.style).not.toBe(ALERT_STYLE);
+    expect(subject.style).toBe(NOMINAL_STYLE);
+    expect(rec.passes.some((p) => p.style === ALERT_STYLE)).toBe(false);
+    // …and still the subject: drawn last, whole, over the top of the ladder.
+    expect(subject).toBe(rec.passes[rec.passes.length - 1]);
+    expect(subject.segments).toBe(kneeEdges);
+    for (const pass of rec.passes.slice(0, -1)) {
+      expect(subject.alpha).toBeGreaterThan(pass.alpha);
+    }
+  });
+
+  it("defaults to alert, because that is what a flag means until it is answered", () => {
+    const rec = recordingContext();
+    recorder = rec;
+    render(<WireframeElevation data={MODEL} damagedJoint="knee_L" />);
+    frame(1000);
+    expect(subjectPass(rec.passes)!.style).toBe(ALERT_STYLE);
+  });
+
+  it("repaints when the tone lands, without tearing down the frame loop", () => {
+    // The loop subscribes once on mount and reads the tone per frame, so an
+    // outcome arriving twenty seconds into a standing verdict has to reach the
+    // next frame through the dirty check — which compares yaw, flag and lift,
+    // and would happily skip a repaint that only changed a colour.
+    const rec = recordingContext();
+    recorder = rec;
+    const { rerender } = render(
+      <WireframeElevation data={MODEL} damagedJoint="knee_L" reducedMotion />,
+    );
+    frame(1000);
+    expect(subjectPass(rec.passes)!.style).toBe(ALERT_STYLE);
+    const before = rec.passes.length;
+
+    rerender(
+      <WireframeElevation
+        data={MODEL}
+        damagedJoint="knee_L"
+        reducedMotion
+        subjectTone="nominal"
+      />,
+    );
+    // Reduced motion holds the yaw still, so nothing but the tone has moved:
+    // a frame that draws at all is the dirty check having noticed it.
+    frame(1100);
+    expect(rec.passes.length).toBeGreaterThan(before);
+    expect(subjectPass(rec.passes)!.style).toBe(NOMINAL_STYLE);
+  });
+
+  it("keeps reporting the leader line's anchor after the tone changes", () => {
+    // The magenta leader is the one object on the board whose whole job is to
+    // say "this module and that row are the same thing", and a restored row is
+    // exactly when it still has something to say. The anchor is derived from
+    // the flagged node index, which the tone must not disturb.
+    const rec = recordingContext();
+    recorder = rec;
+    const seen: Array<[number, number, number]> = [];
+    render(
+      <WireframeElevation
+        data={MODEL}
+        damagedJoint="knee_L"
+        subjectTone="nominal"
+        onAnchorChange={(x, y, clearX) => seen.push([x, y, clearX])}
+      />,
+    );
+    for (let t = 1000; t <= 3000; t += 100) frame(t);
+    expect(seen.length).toBeGreaterThan(0);
+  });
+
+  it("says what the module is marked as, not just that it is marked", () => {
+    recorder = recordingContext();
+    const { rerender } = render(
+      <WireframeElevation data={MODEL} damagedJoint="knee_L" />,
+    );
+    // The canvas is the picture; the wrapper is the turntable control.
+    expect(screen.getByRole("img")).toHaveAccessibleName(/knee L marked damaged/i);
+    rerender(
+      <WireframeElevation data={MODEL} damagedJoint="knee_L" subjectTone="nominal" />,
+    );
+    expect(screen.getByRole("img")).toHaveAccessibleName(/knee L marked restored/i);
   });
 
   it("holds a static front elevation under prefers-reduced-motion", () => {
@@ -647,5 +803,72 @@ describe("StatusBoard elevation slot", () => {
     const last = rec.passes[rec.passes.length - 1]!;
     expect(last.segments).toBe(MODEL.byName.get("knee_actuator_L")!.edgeCount);
     expect(last.style).not.toBe(rec.passes[0]!.style);
+  });
+
+  /**
+   * The board's own wiring: one predicate decides the manifest stamp, the
+   * spoken summary and the drawing's stroke, so the inventory, the screen
+   * reader and the picture cannot end up telling three stories about one joint.
+   */
+  it("retones the model elevation once the re-measure clears the channel", async () => {
+    vi.stubGlobal("fetch", ok(RAW));
+    await loadWireframe();
+    toCleared();
+    const rec = recordingContext();
+    recorder = rec;
+
+    render(<StatusBoard />);
+    frame(1000);
+
+    const subject = subjectPass(rec.passes)!;
+    expect(subject).toBeDefined();
+    expect(subject.style).toBe(NOMINAL_STYLE);
+    expect(rec.passes.some((p) => p.style === ALERT_STYLE)).toBe(false);
+    expect(screen.getByRole("img")).toHaveAccessibleName(/knee L marked restored/i);
+    // The stamp it has to agree with.
+    expect(screen.getByText("KNEE_L").closest("[data-state]")).toHaveAttribute(
+      "data-state",
+      "restored",
+    );
+  });
+
+  it("leaves the model elevation red while the correction is only partial", async () => {
+    vi.stubGlobal("fetch", ok(RAW));
+    await loadWireframe();
+    toFlag();
+    const rec = recordingContext();
+    recorder = rec;
+
+    render(<StatusBoard />);
+    frame(1000);
+
+    expect(subjectPass(rec.passes)!.style).toBe(ALERT_STYLE);
+    expect(screen.getByRole("img")).toHaveAccessibleName(/knee L marked damaged/i);
+  });
+
+  it("retones the SVG fallback too, so the two drawings never disagree", () => {
+    // No model on hand: the slot holds the hand-drawn elevation, which colours
+    // the same limb from the same fact.
+    toCleared();
+    render(<StatusBoard />);
+
+    expect(screen.getByText("Front elev.")).toBeInTheDocument();
+    const svg = screen.getByRole("img");
+    expect(svg).toHaveAccessibleName(/knee L marked restored/i);
+    // The annotation frame and the hatch it is filled with, both off --nominal.
+    const frameRect = svg.querySelector("[data-damage-mark] rect");
+    expect(frameRect).toHaveAttribute("stroke", "var(--nominal)");
+    expect(svg.querySelector("pattern line")).toHaveAttribute("stroke", "var(--nominal)");
+  });
+
+  it("keeps the SVG fallback's mark in alert while the fault stands", () => {
+    toFlag();
+    render(<StatusBoard />);
+    const svg = screen.getByRole("img");
+    expect(svg).toHaveAccessibleName(/knee L marked damaged/i);
+    expect(svg.querySelector("[data-damage-mark] rect")).toHaveAttribute(
+      "stroke",
+      "var(--alert)",
+    );
   });
 });

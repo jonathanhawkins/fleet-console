@@ -164,6 +164,23 @@ export function useDiagSession(): DiagSession | null {
 }
 
 /**
+ * What the machine's own re-measure said, if it has said anything yet.
+ *
+ * A primitive subscription over the *shown* session, so the header re-renders
+ * when the outcome lands and at no other time — and so the last 250 ms of an
+ * ascent keep printing the outcome the departing scan actually reached, exactly
+ * as its unit id and elapsed clock do.
+ *
+ * It exists so the session header can change register without the stage having
+ * to hand it a fourth prop: the header is a projection of the session, like
+ * every other panel here, and the rule at the top of this file is that a panel
+ * reads what it needs from the store rather than being told.
+ */
+export function useCalibrationOutcome(): "partial" | "cleared" | null {
+  return useIncidentStore((s) => selectShownSession(s)?.calibration?.outcome ?? null);
+}
+
+/**
  * True where the scan is one scrolling column rather than a board.
  *
  * Read this only to decide what to *render* — a component that is genuinely

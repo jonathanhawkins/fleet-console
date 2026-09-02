@@ -28,6 +28,32 @@ export const RECAL_GATE_SUFFIX = POSTURE_GATE_SUFFIX;
 /** Why, for aria-describedby — the fact the suffix compresses. */
 export const RECAL_GATE_NOTE = "Unloaded sweep · permitted only while seated";
 
+/** The sim's judgement of its own work; the field every surface below keys on. */
+export type CalibrationOutcome = "partial" | "cleared";
+
+/**
+ * Did the machine's own re-measure say the channel came back?
+ *
+ * One predicate, read by six surfaces — the headline's register, the summary's
+ * tense, the exhibit's frame, the manifest row, the session header's phase chip
+ * and the operator page's banner. It exists because "cleared" stopped being a
+ * line on a card and became a state of the whole board, and a state of the
+ * whole board that each surface re-derives from `=== "cleared"` is a state six
+ * surfaces can disagree about.
+ *
+ * No joint argument, deliberately. The incident store refuses a re-measure that
+ * is not about the standing verdict's own joint (lib/stores/incidentStore.ts),
+ * so a calibration that reached a session is already known to be about its
+ * subject. The one consumer that still checks the joint is the *exhibit*, which
+ * has to know which figure the trace belongs under rather than whether the
+ * fault is over.
+ */
+export function isRestored(
+  calibration: { outcome: CalibrationOutcome } | null | undefined,
+): boolean {
+  return calibration?.outcome === "cleared";
+}
+
 /**
  * What a recalibration does to the unit, stated before it is ordered.
  *
@@ -142,18 +168,77 @@ export function residualReading(
  * sentences that must not be able to disagree — this line and the trace's own
  * footer both describe the same measurement.
  *
- * Neither branch congratulates anybody. PARTIAL is a warning, and CLEARED is a
- * measurement with a residual printed beside it: the console states outcomes,
- * and a fault that stopped existing is a fact, not an achievement.
+ * Neither branch congratulates anybody. A partial result states what is left
+ * and names the cause; a cleared one states that the channel came back and
+ * prints the residual beside it: the console states outcomes, and a fault that
+ * stopped existing is a fact, not an achievement.
+ *
+ * Neither branch opens with the outcome word any more. PARTIAL and CLEARED now
+ * ride on the anomaly line in the headline block — where the operator's eye
+ * lands first and where the register of the whole card is decided — so printing
+ * them again one line down was the conclusion stating its own result twice, the
+ * second time in the smallest type on the card.
  */
 export function calibrationAmendment(
-  outcome: "partial" | "cleared",
+  outcome: CalibrationOutcome,
   residual: ResidualReading,
 ): string {
   return outcome === "cleared"
-    ? `CLEARED · CHANNEL RESTORED · RESIDUAL ${residual.machine}`
-    : `PARTIAL · RESIDUAL ${residual.machine} · MECHANICAL WEAR INDICATED`;
+    ? `CHANNEL RESTORED · RESIDUAL ${residual.machine}`
+    : `RESIDUAL ${residual.machine} · MECHANICAL WEAR INDICATED`;
 }
+
+/**
+ * The tense marker over the scan's own summary, once the scan's own summary has
+ * stopped being true.
+ *
+ * The report's `summary` is written in the present — "LIVE TRACE DISPLACED 0.21
+ * FROM REFERENCE DATUM" — because when it was written the trace was displaced.
+ * After a cleared calibration it is displaced by 0.012 and that sentence, left
+ * standing unqualified under a headline, is the single most misleading line on
+ * the card: the machine's own words, in the present tense, about a measurement
+ * that has been superseded. It is not deleted — it is what the scan found, and
+ * a record that edits its own findings is not a record — it is dated.
+ */
+export const SCAN_TENSE_LABEL = "At scan";
+
+/**
+ * What is true now, in the same voice the report's summary was written in.
+ *
+ * Only a cleared outcome gets one. After a partial the report's summary is
+ * still an accurate description of the channel — the trace really is still off
+ * its reference — so amending it would be the console adding a sentence that
+ * says nothing the standing one did not.
+ *
+ * It states the re-measurement and its residual and stops there. No "fixed", no
+ * "resolved", no verb the console cannot stand behind: the machine drove the
+ * joint through its range, measured the channel again, and the channel is
+ * inside the envelope. That is the whole claim.
+ */
+export function calibrationSummary(
+  outcome: CalibrationOutcome,
+  residual: ResidualReading,
+): string | null {
+  return outcome === "cleared"
+    ? `RE-MEASURED AFTER CALIBRATION: CHANNEL WITHIN REFERENCE ENVELOPE, RESIDUAL ${residual.machine}.`
+    : null;
+}
+
+/**
+ * What the escalation controls say once the fault they escalate has gone.
+ *
+ * DISPATCH SERVICE and DISABLE JOINT are the rungs *above* a calibration, and
+ * after a cleared one there is nothing left for them to be the answer to. They
+ * are not removed — the report recommended them and a card that hides a
+ * recommendation is editing the report — so they take the idiom the posture
+ * gate already established: inert, with the reason as a suffix on the label and
+ * the fact underneath. The difference from the posture gate is that this one
+ * never lifts, which is correct: the precondition it fails is not a posture the
+ * robot can adopt, it is a fault that no longer exists.
+ */
+export const RESTORED_GATE_SUFFIX = "NOT INDICATED";
+
+export const RESTORED_GATE_NOTE = "Channel restored · escalation no longer indicated";
 
 /**
  * What is left on the table after a calibration, keyed by outcome.
@@ -177,7 +262,7 @@ const RESIDUAL_DIFFERENTIALS: Readonly<Record<string, readonly string[]>> = {
 /** `null` when there is nothing the machine knows to say. */
 export function residualDifferential(
   anomaly: string,
-  outcome: "partial" | "cleared",
+  outcome: CalibrationOutcome,
 ): string | null {
   if (outcome === "cleared") return null;
   const causes = RESIDUAL_DIFFERENTIALS[anomaly];

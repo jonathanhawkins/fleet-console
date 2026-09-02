@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { type SubjectTone } from "./wireframe-elevation";
 
 /**
  * Our own robot, drawn front elevation.
@@ -40,18 +41,30 @@ export const SILHOUETTE_VIEWBOX = { width: 120, height: 280 };
 export interface UnitSilhouetteProps {
   /** Wire name of the joint to mark as damaged, e.g. "knee_L". */
   damagedJoint?: string | null;
-  /** Ref onto the damaged joint's marker, for the board's leader line. */
+  /**
+   * Which token the marked joint is drawn in — the same two the wireframe
+   * takes, and the same fact, because this drawing and that one occupy one
+   * slot on the board and must not answer the same question differently.
+   */
+  subjectTone?: SubjectTone;
+  /** Ref onto the marked joint, for the board's leader line. */
   markRef?: React.Ref<SVGGElement>;
   className?: string;
 }
 
 export function UnitSilhouette({
   damagedJoint,
+  subjectTone = "alert",
   markRef,
   className,
 }: UnitSilhouetteProps) {
   const damaged = damagedJoint ? JOINT_MARKS[damagedJoint] : undefined;
   const hatchId = React.useId();
+  // One token name, resolved once, spent in three places: the hatch rules, the
+  // annotation frame and the joint marker. Three literals here would be three
+  // chances for the annotation to keep the colour the marker just left.
+  const markToken = subjectTone === "nominal" ? "var(--nominal)" : "var(--alert)";
+  const markClass = subjectTone === "nominal" ? "text-nominal" : "text-alert";
 
   return (
     <svg
@@ -59,7 +72,9 @@ export function UnitSilhouette({
       role="img"
       aria-label={
         damagedJoint
-          ? `Unit elevation, ${damagedJoint.replace("_", " ")} marked damaged`
+          ? `Unit elevation, ${damagedJoint.replace("_", " ")} marked ${
+              subjectTone === "nominal" ? "restored" : "damaged"
+            }`
           : "Unit elevation"
       }
       className={cn("block h-full w-full", className)}
@@ -77,7 +92,7 @@ export function UnitSilhouette({
           idea here, at 3px pitch.
         */}
         <pattern id={hatchId} width="4" height="3" patternUnits="userSpaceOnUse">
-          <line x1="0" y1="0.5" x2="4" y2="0.5" stroke="var(--alert)" strokeWidth="1" />
+          <line x1="0" y1="0.5" x2="4" y2="0.5" stroke={markToken} strokeWidth="1" />
         </pattern>
       </defs>
 
@@ -132,7 +147,7 @@ export function UnitSilhouette({
             y={p.y - 3.5}
             width="7"
             height="7"
-            className={isDamaged ? "text-alert" : "text-ink-muted"}
+            className={isDamaged ? markClass : "text-ink-muted"}
             strokeWidth={isDamaged ? 1.4 : 1}
           />
         );
@@ -147,7 +162,7 @@ export function UnitSilhouette({
             width="26"
             height="30"
             fill={`url(#${hatchId})`}
-            stroke="var(--alert)"
+            stroke={markToken}
             strokeWidth="1"
             opacity={0.9}
           />

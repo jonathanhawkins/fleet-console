@@ -50,8 +50,9 @@ jobs:
         run: node scripts/check-budgets.mjs out >> "$GITHUB_STEP_SUMMARY"
       # Same export, served compressed: desktop-preset Lighthouse on / and
       # /unit/N-01 against Playwright's Chromium (installed above). Fails the job
-      # under performance 90 or any other category under 100, writes the full
-      # reports to docs/evidence/lighthouse/, and posts the scores to the summary.
+      # when accessibility, best-practices or SEO drop under 100; performance is
+      # reported here and gated on documented hardware (docs/perf.md). Writes
+      # the reports to docs/evidence/lighthouse/ and posts scores to the summary.
       - name: Lighthouse gate
         run: node scripts/lighthouse.mjs out
         env:

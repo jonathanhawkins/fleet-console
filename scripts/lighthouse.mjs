@@ -11,7 +11,8 @@ import { launch } from "chrome-launcher";
  * Serves the static export the way the deploy target does (compressed text,
  * `scripts/serve-static.mjs --gzip`), runs the desktop preset against the two
  * routes the budget script already guards, writes each full report to
- * `docs/evidence/lighthouse/<route>.json`, prints the four category scores,
+ * `docs/evidence/lighthouse/<route>.json` (the median-performance run of three;
+ * one on CI, or `LH_RUNS`), prints the four category scores,
  * and exits 1 when any score is below the bar:
  *
  *   performance      >= 90
@@ -44,6 +45,15 @@ const ROUTES = [
   { route: "/", file: "index.json" },
   { route: "/unit/N-01", file: "unit-N-01.json" },
 ];
+
+/**
+ * Performance is gated on a laptop (documented hardware, docs/perf.md) and
+ * reported on CI: a shared runner's main thread with software WebGL swings
+ * total-blocking-time by an order of magnitude between runs, so a score gate
+ * there would measure the runner, not the page. The deterministic categories
+ * are gated everywhere.
+ */
+const GATED_LOCALLY_ONLY = new Set(process.env.CI ? ["performance"] : []);
 
 const BAR = {
   performance: 90,
@@ -126,29 +136,41 @@ try {
 
   mkdirSync(EVIDENCE, { recursive: true });
 
+  // Performance is noisy run to run (main-thread contention moves TBT by
+  // 100+ ms on the same build), so each route is measured RUNS times and the
+  // median-performance run is the one kept and gated. CI reports a single run.
+  const RUNS = Number.parseInt(process.env.LH_RUNS ?? "", 10) || (process.env.CI ? 1 : 3);
+
   for (const { route, file } of ROUTES) {
-    const result = await lighthouse(
-      `${origin}${route}`,
-      {
-        port: chrome.port,
-        output: "json",
-        logLevel: "error",
-        onlyCategories: Object.keys(BAR),
-        disableFullPageScreenshot: true,
-        skipAudits: ["screenshot-thumbnails", "final-screenshot"],
-      },
-      desktopConfig,
-    );
-    if (!result) throw new Error(`lighthouse: no result for ${route}`);
-    const { lhr } = result;
-    if (lhr.runtimeError) {
-      throw new Error(`lighthouse: ${route}: ${lhr.runtimeError.message}`);
+    const runs = [];
+    for (let i = 0; i < RUNS; i += 1) {
+      const result = await lighthouse(
+        `${origin}${route}`,
+        {
+          port: chrome.port,
+          output: "json",
+          logLevel: "error",
+          onlyCategories: Object.keys(BAR),
+          disableFullPageScreenshot: true,
+          skipAudits: ["screenshot-thumbnails", "final-screenshot"],
+        },
+        desktopConfig,
+      );
+      if (!result) throw new Error(`lighthouse: no result for ${route}`);
+      if (result.lhr.runtimeError) {
+        throw new Error(`lighthouse: ${route}: ${result.lhr.runtimeError.message}`);
+      }
+      runs.push(result.lhr);
     }
+    runs.sort((a, b) => score(a, "performance") - score(b, "performance"));
+    const lhr = runs[Math.floor(runs.length / 2)];
 
     writeFileSync(join(EVIDENCE, file), JSON.stringify(lhr, null, 2) + "\n");
 
     const scores = Object.fromEntries(Object.keys(BAR).map((id) => [id, score(lhr, id)]));
-    const pass = Object.entries(BAR).every(([id, bar]) => scores[id] >= bar);
+    const pass = Object.entries(BAR).every(
+      ([id, bar]) => GATED_LOCALLY_ONLY.has(id) || scores[id] >= bar,
+    );
     if (!pass) failed = true;
     rows.push({
       route,
@@ -178,7 +200,7 @@ if (process.env.GITHUB_STEP_SUMMARY) {
     `| ${cols.map(() => "---").join(" | ")} |`,
     ...rows.map((r) => `| ${cols.map((c) => r[c]).join(" | ")} |`),
     ``,
-    `Gate: performance ≥ ${BAR.performance}; accessibility, best-practices, seo = 100.`,
+    `Gate on CI: accessibility, best-practices, seo = 100. Performance (≥ ${BAR.performance}) is gated locally; the stored receipt is docs/evidence/lighthouse/.`,
     ``,
   ].join("\n");
   appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
@@ -186,7 +208,9 @@ if (process.env.GITHUB_STEP_SUMMARY) {
 
 if (failed) {
   console.error(
-    `lighthouse: below the bar (performance ≥ ${BAR.performance}; accessibility, best-practices, seo = 100).`,
+    GATED_LOCALLY_ONLY.size
+      ? "lighthouse: below the bar (accessibility, best-practices, seo = 100)."
+      : `lighthouse: below the bar (performance ≥ ${BAR.performance}; accessibility, best-practices, seo = 100).`,
   );
   process.exit(1);
 }

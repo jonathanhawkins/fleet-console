@@ -152,8 +152,13 @@ The Lighthouse claim is no longer a table typed into this file. It is
 `scripts/serve-static.mjs --gzip` (what the deploy target sends), against `/`
 and `/unit/N-01`, on Playwright's Chromium with SwiftShader GL so a laptop and
 a CI runner measure the same thing. It exits 1 under **performance 90** or
-under **100** on accessibility, best practices or SEO, and CI runs it in the
-e2e job right after the bundle budgets, posting the scores to the job summary.
+under **100** on accessibility, best practices or SEO. CI runs it in the e2e
+job right after the bundle budgets and posts the scores to the job summary;
+there, performance is reported rather than gated, because a shared runner's
+main thread with software WebGL moves total-blocking-time by an order of
+magnitude between runs (72 on one run, 100 on the next) and a gate on it
+would measure the runner, not the page. The performance bar is held on the
+hardware above, and the stored reports are cut there.
 
 The reports it wrote are committed, screenshots stripped, everything else
 intact — load them in the Lighthouse Viewer:

@@ -111,9 +111,12 @@ summary; the numbers below are copied from that output.
 | 500 units                                | ~5,000 batches/s, 13.4 µs/msg, p95 10 ms | PASS    |
 
 Lighthouse is a gate, not a quote: `node scripts/lighthouse.mjs` runs the
-desktop preset against `/` and `/unit/N-01` on the same export, fails under
-performance 90 or any other category under 100, and CI runs it after the
-budgets on every push. The full reports it wrote are the receipt —
+desktop preset against `/` and `/unit/N-01` on the same export and fails under
+performance 90 or any other category under 100. CI runs it after the budgets
+on every push, gating the three deterministic categories and reporting
+performance, which on a shared runner measures the runner more than the page.
+The full reports, cut on the hardware documented in docs/perf.md, are the
+receipt —
 [docs/evidence/lighthouse/index.json](docs/evidence/lighthouse/index.json)
 and [docs/evidence/lighthouse/unit-N-01.json](docs/evidence/lighthouse/unit-N-01.json)
 (load either in the Lighthouse Viewer).

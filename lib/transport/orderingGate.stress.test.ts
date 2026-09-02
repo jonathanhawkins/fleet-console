@@ -1,7 +1,13 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from "vitest";
 import { type FleetMessage, type TelemetryMessage } from "@/lib/schema";
-import { getUnitBuffers, useAuditStore, useFleetStore } from "@/lib/stores";
+import {
+  getUnitBuffers,
+  getUnitTelemetryVersion,
+  telemetryBatchCount,
+  useAuditStore,
+  useFleetStore,
+} from "@/lib/stores";
 import { createSimEngine } from "@/sim/engine";
 import { createOrderingGate } from "./orderingGate";
 
@@ -156,14 +162,14 @@ describe("ordering gate under a 500-unit mangled stream", () => {
     // newer truth is dropped, never reordered back in. The sparkline shows a
     // 100 ms notch rather than time flowing backwards.
     for (const id of state.unitIds) {
-      expect(state.unitTelemetryVersions[id]).toBe(4);
+      expect(getUnitTelemetryVersion(id)).toBe(4);
       const ts = getUnitBuffers(id)?.ts.toArray() ?? [];
       expect(ts).toHaveLength(4);
       for (let i = 1; i < ts.length; i++) {
         expect(ts[i]!).toBeGreaterThan(ts[i - 1]!);
       }
     }
-    expect(state.telemetryVersion).toBe(4 * UNITS);
+    expect(telemetryBatchCount()).toBe(4 * UNITS);
   });
 
   it("a snapshot resets the gates so a reconnect replay is not counted as disorder", () => {

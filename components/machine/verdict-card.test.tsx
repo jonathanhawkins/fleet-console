@@ -91,6 +91,33 @@ describe("VerdictCard", () => {
     expect(screen.getByText(report.summary)).toBeInTheDocument();
   });
 
+  /**
+   * The verdict is the loudest thing in machine space. jsdom lays nothing
+   * out, so the claim is made where it is decided: the two lines of the
+   * finding sit at the top of the machine type scale and carry the alert
+   * token, and nothing else on the card reaches either. The rendered sizes
+   * and colours are asserted in a browser by e2e/golden-path.spec.ts.
+   */
+  it("sets the finding at the top of the scale, in alert, and nothing else that loud", () => {
+    const { container } = render(<VerdictCard session={session()} />);
+    const h2 = screen.getByRole("heading", { level: 2 });
+    expect(h2.className).toContain("text-display");
+    expect(h2.className).toContain("text-alert");
+
+    const anomaly = container.querySelector('[data-slot="verdict-anomaly"]');
+    expect(anomaly).toHaveTextContent(/^gain anomaly$/i);
+    expect(anomaly?.className).toContain("text-title");
+    expect(anomaly?.className).toContain("text-alert");
+
+    // Everything else on the card is quieter: no other element is set at
+    // display size, and the section labels around the headline stay labels.
+    expect(container.querySelectorAll(".text-display")).toHaveLength(1);
+    expect(screen.getByText("Verdict").className).toContain("text-label");
+    expect(screen.getByText(report.summary).className).not.toMatch(
+      /text-(display|title)/,
+    );
+  });
+
   it("frames the anomaly as a hypothesis: the differential rides under the headline", () => {
     render(<VerdictCard session={session()} />);
     // the scan measured a signature, it did not open the knee — the

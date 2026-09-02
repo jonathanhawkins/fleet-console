@@ -48,6 +48,20 @@ jobs:
       - name: Bundle receipt
         if: always()
         run: node scripts/check-budgets.mjs out >> "$GITHUB_STEP_SUMMARY"
+      # Same export, served compressed: desktop-preset Lighthouse on / and
+      # /unit/N-01 against Playwright's Chromium (installed above). Fails the job
+      # under performance 90 or any other category under 100, writes the full
+      # reports to docs/evidence/lighthouse/, and posts the scores to the summary.
+      - name: Lighthouse gate
+        run: node scripts/lighthouse.mjs out
+        env:
+          CI: "1"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-reports
+          path: docs/evidence/lighthouse/
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

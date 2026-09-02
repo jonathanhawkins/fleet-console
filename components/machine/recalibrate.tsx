@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { commandRecalibrate } from "@/components/console";
+import { commandRecalibrate } from "@/components/fleet/telemetry-command";
 import { useFleetStore } from "@/lib/stores";
 import { ExecuteAction, type ManeuverSpec } from "./execute-action";
 import { RECAL_GATE_NOTE, RECAL_GATE_SUFFIX, recalImpact } from "./recalibrate-copy";

@@ -216,27 +216,29 @@ export function ExecuteAction({ unitId, action, spec, gate }: ExecuteActionProps
     useCommandStore.getState().dismissCommand(unitId, spec.cmd);
   }, [unitId, spec]);
 
+  const confirming = local === "confirming";
+
   return (
     <div ref={regionRef} tabIndex={-1} className="outline-none">
       {command !== undefined ? (
         <CommandReadout state={command} onDismiss={dismiss} />
-      ) : local === "confirming" ? (
-        <ExecuteConfirm
-          unitId={unitId}
-          title={spec.confirmTitle}
-          impact={spec.impact}
-          slot={spec.slot}
-          onConfirm={confirm}
-          onAbort={abort}
-        />
       ) : (
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-3">
+            {/* The trigger stays in the flow while its confirmation is open,
+                disabled rather than unmounted. The confirmation used to take
+                its place, and the swap moved every line under it by the
+                difference in their heights — on the board that was the centre
+                column scrolling to keep the gate in view, and the chassis
+                elevation going half off screen for a question about the
+                knee. A control that keeps its footprint costs the layout
+                nothing in either direction, and a disabled control is also
+                the honest state of a button whose press is being confirmed. */}
             <ConsoleButton
               ref={triggerRef}
               size="md"
               variant="secondary"
-              disabled={local === "sent" || gated}
+              disabled={confirming || local === "sent" || gated}
               aria-describedby={gate || local === "nolink" ? noteId : undefined}
               onClick={() => {
                 returnFocus.current = true;
@@ -270,6 +272,16 @@ export function ExecuteAction({ unitId, action, spec, gate }: ExecuteActionProps
           ) : (
             <p className="text-label text-ink-muted uppercase">{EXECUTE_NOTE}</p>
           )}
+          {confirming ? (
+            <ExecuteConfirm
+              unitId={unitId}
+              title={spec.confirmTitle}
+              impact={spec.impact}
+              slot={spec.slot}
+              onConfirm={confirm}
+              onAbort={abort}
+            />
+          ) : null}
         </div>
       )}
     </div>
@@ -277,22 +289,39 @@ export function ExecuteAction({ unitId, action, spec, gate }: ExecuteActionProps
 }
 
 /**
- * The confirmation, standing exactly where the button stood.
+ * The confirmation, and where it stands.
  *
  * Not a floating modal, and not because one was hard to build. Machine space is
  * an instrument: a slab that lifts off the board and drops a scrim over the
  * evidence would be the one object on this screen that behaves like a web page,
  * and it would cover the traces that justify the maneuver at the exact moment
- * the operator is deciding whether to perform it. So the confirmation replaces
- * the control in the flow — the eye is already there, the board stays readable
- * behind nothing, and the same block works unchanged inside the phone's verdict
- * sheet, which is a transformed, scrolling surface that a `position: fixed`
- * overlay would have to be fought into.
+ * the operator is deciding whether to perform it. So the board stays readable
+ * behind nothing, and the block is the same 1px box in both places it appears.
+ *
+ * Where it stands differs, and the stylesheet decides (`.execute-confirm` in
+ * app/styles/machine.css), because the two surfaces have opposite problems:
+ *
+ * - **In the board's centre column** it is pinned to the foot of the column,
+ *   over the card, out of the flow. That column scrolls, and a gate that
+ *   opened *in* the flow grew the card under the manifest and scrolled the
+ *   column to keep itself in view — which pushed the chassis elevation half
+ *   off screen for a question about the knee. Out of the flow, nothing above
+ *   moves when it opens and nothing moves back when it closes: the manifest,
+ *   the elevation and the leader line between them stay exactly where the
+ *   operator was looking. It covers only the lower edge of the card — the
+ *   filing controls and RETURN, which the focus trap has already taken off the
+ *   table — and never the evidence in the other two columns.
+ * - **In the phone's verdict sheet** there is no column to pin to and nothing
+ *   above it to protect, so it stays in the flow under the control that opened
+ *   it and asks the sheet's own scroller to bring it into view. The sheet is a
+ *   transformed, scrolling surface that a `position: fixed` overlay would have
+ *   to be fought into; a block in the flow needs no fighting.
  *
  * It is still a modal in every way that protects the operator: `alertdialog`,
  * `aria-modal`, a focus trap, Escape aborts, and the pointer cannot reach a
  * control it has not been offered because the two it offers are the only ones
- * focus can reach.
+ * focus can reach — including the trigger, which stays on screen but disabled
+ * for as long as the gate is up.
  *
  * ## Safety decisions, deliberately
  *
@@ -334,10 +363,12 @@ export function ExecuteConfirm({
 
   React.useEffect(() => {
     abortRef.current?.focus({ preventScroll: true });
-    // On the board the card sits in a scrolling column, and the confirmation is
-    // taller than the control it replaced; on the phone it lands inside the
-    // sheet's scroller. Either way the block has to be the thing in view.
-    boxRef.current?.scrollIntoView?.({ block: "nearest", behavior: "auto" });
+    // Only where the block is in the flow (the sheet) is there anything to
+    // scroll: pinned to the column it is in view by construction, and asking
+    // the column to scroll anyway is the jump this layout exists to remove.
+    const box = boxRef.current;
+    if (!box || getComputedStyle(box).position === "absolute") return;
+    box.scrollIntoView?.({ block: "nearest", behavior: "auto" });
   }, []);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -383,8 +414,9 @@ export function ExecuteConfirm({
       onKeyDown={onKeyDown}
       // A 1px box on the void, and one luminance step of ground under it so the
       // gate is distinguishable from the card it interrupts without a shadow,
-      // a radius or a scrim — none of which exist in this world.
-      className="flex flex-col gap-3 border border-line-strong bg-surface p-3"
+      // a radius or a scrim — none of which exist in this world. Where it
+      // stands is `.execute-confirm`'s decision (see above).
+      className="execute-confirm flex flex-col gap-3 border border-line-strong bg-surface p-3"
     >
       <h3 id={titleId} className="text-heading text-ink uppercase">
         {title} · Unit {unitId}

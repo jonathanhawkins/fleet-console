@@ -12,6 +12,7 @@ import { resetCohortDerivation } from "./cohortStore";
 import { commandKey, useCommandStore } from "./commandStore";
 import { useFleetStore } from "./fleetStore";
 import { useIncidentStore } from "./incidentStore";
+import { getUnitTelemetryVersion } from "./telemetryChannel";
 
 /** The per-unit slice is keyed by (unit, command) since */
 const SIT_KEY = commandKey("N-07", "COMMAND_SAFE_SIT");
@@ -81,7 +82,7 @@ describe("bindTransport", () => {
       ts: 100,
       batch: [{ joint: "knee_L", tempC: 33, torqueNm: 12, currentA: 1.5, battery: 70 }],
     });
-    expect(useFleetStore.getState().unitTelemetryVersions["N-07"]).toBe(1);
+    expect(getUnitTelemetryVersion("N-07")).toBe(1);
 
     transport.onMessage!({
       t: "alert",

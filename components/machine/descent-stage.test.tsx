@@ -1,14 +1,14 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DescentOverlay } from "@/components/console/descent-overlay";
+import { DescentOverlay } from "@/components/fleet/descent-overlay";
 import { EASE_WIPE, descentTimeline } from "@/components/console/descent-motion";
-import { IncidentBanner } from "@/components/console/incident-banner";
+import { IncidentBanner } from "@/components/fleet/incident-banner";
 import {
   RUN_BLOCKED_REASON,
   RunDiagnosticButton,
-} from "@/components/console/run-diagnostic";
-import { setCommandTransport } from "@/components/console/telemetry-command";
+} from "@/components/fleet/run-diagnostic";
+import { setCommandTransport } from "@/components/fleet/telemetry-command";
 import {
   type DiagEvent,
   type DiagEventMessage,
@@ -50,7 +50,7 @@ import type * as ScanLogLines from "./scan-log-lines";
  *
  * The third describe is the constraint on both fixes: the choreography is the
  * signature moment of this demo, and neither of them is allowed to move it. The
- * ascent's ramp is measured — fitted, not eyeballed — in both timelines.
+ * ascent's ramp is read frame by frame off an injected clock, in both timelines.
  */
 
 /**
@@ -82,6 +82,29 @@ vi.mock("./scan-log-lines", async (importOriginal) => {
       return lines;
     },
   };
+});
+
+/**
+ * The frame scheduler, as a seam.
+ *
+ * framer-motion's frameloop captures `requestAnimationFrame` once, at module
+ * load, and never looks at the global again — so a scheduler stubbed inside a
+ * test is invisible to it, and every animation in this file would keep running
+ * on jsdom's 16 ms interval regardless. Installing the seam here, hoisted above
+ * every import, means the reference framer captures is this indirection; what
+ * it forwards to is decided per test. It forwards to jsdom's own scheduler
+ * unless a test says otherwise, so the frames the rest of this file waits on
+ * are exactly the frames it always waited on.
+ */
+const frameScheduler = vi.hoisted(() => {
+  const real = {
+    request: globalThis.requestAnimationFrame,
+    cancel: globalThis.cancelAnimationFrame,
+  };
+  const seam = { request: real.request, cancel: real.cancel, real };
+  globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => seam.request(cb);
+  globalThis.cancelAnimationFrame = (handle: number) => seam.cancel(handle);
+  return seam;
 });
 
 /** See the note in descent-overlay.test.tsx: pay the chunk's transform once. */
@@ -215,90 +238,86 @@ async function toVerdict(): Promise<void> {
   await screen.findByRole("button", { name: EXECUTED_RECOMMENDATION });
 }
 
-describe(
-  "DescentStage — nothing under a departing surface is pressable",
-  { timeout: 60_000 },
-  () => {
-    it("sends nothing on the wire when a click lands on the leaving surface", async () => {
-      const user = userEvent.setup();
-      await toVerdict();
+describe("DescentStage — nothing under a departing surface is pressable", () => {
+  it("sends nothing on the wire when a click lands on the leaving surface", async () => {
+    const user = userEvent.setup();
+    await toVerdict();
 
-      // The operator opened the confirmation and then left — CLOSE, Escape and
-      // RETURN all land on `completeAscent`, and none of them takes the
-      // confirmation down with them.
-      await user.click(screen.getByRole("button", { name: EXECUTED_RECOMMENDATION }));
-      const confirm = await screen.findByRole("button", { name: "Confirm" });
-      expect(sent).toEqual([]);
+    // The operator opened the confirmation and then left — CLOSE, Escape and
+    // RETURN all land on `completeAscent`, and none of them takes the
+    // confirmation down with them.
+    await user.click(screen.getByRole("button", { name: EXECUTED_RECOMMENDATION }));
+    const confirm = await screen.findByRole("button", { name: "Confirm" });
+    expect(sent).toEqual([]);
 
-      dispatch(() => useIncidentStore.getState().completeAscent());
+    dispatch(() => useIncidentStore.getState().completeAscent());
 
-      // The surface outlives the session by one exit — that is the design, and
-      // it is what makes this window exist at all.
-      expect(overlay()).not.toBeNull();
-      expect(confirm.isConnected).toBe(true);
+    // The surface outlives the session by one exit — that is the design, and
+    // it is what makes this window exist at all.
+    expect(overlay()).not.toBeNull();
+    expect(confirm.isConnected).toBe(true);
 
-      // …and for every frame of it, the pointer cannot reach a robot.
-      await expect(user.click(confirm)).rejects.toThrow(/pointer-events/);
-      expect(sent).toEqual([]);
+    // …and for every frame of it, the pointer cannot reach a robot.
+    await expect(user.click(confirm)).rejects.toThrow(/pointer-events/);
+    expect(sent).toEqual([]);
 
-      // The other half of the bug: the incident is already archived, so a
-      // command that got through could never have been recorded against it.
-      expect(useIncidentStore.getState().history[0]?.acknowledged).toEqual([]);
-    });
+    // The other half of the bug: the incident is already archived, so a
+    // command that got through could never have been recorded against it.
+    expect(useIncidentStore.getState().history[0]?.acknowledged).toEqual([]);
+  });
 
-    it("refuses the EXECUTE control itself, so the confirmation is unreachable", async () => {
-      const user = userEvent.setup();
-      await toVerdict();
-      const execute = screen.getByRole("button", { name: EXECUTED_RECOMMENDATION });
+  it("refuses the EXECUTE control itself, so the confirmation is unreachable", async () => {
+    const user = userEvent.setup();
+    await toVerdict();
+    const execute = screen.getByRole("button", { name: EXECUTED_RECOMMENDATION });
 
-      dispatch(() => useIncidentStore.getState().completeAscent());
+    dispatch(() => useIncidentStore.getState().completeAscent());
 
-      await expect(user.click(execute)).rejects.toThrow(/pointer-events/);
-      expect(screen.queryByRole("alertdialog")).toBeNull();
-      expect(sent).toEqual([]);
-    });
+    await expect(user.click(execute)).rejects.toThrow(/pointer-events/);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(sent).toEqual([]);
+  });
 
-    /**
-     * The reduced timeline is where this bites hardest and would have been
-     * found last: the surface does not climb away, it fades — so the EXECUTE
-     * controls spend the whole exit invisible and, before this fix, live.
-     */
-    it("holds under prefers-reduced-motion, where the exit is a pure fade", async () => {
-      preferReducedMotion();
-      const user = userEvent.setup();
-      await toVerdict();
+  /**
+   * The reduced timeline is where this bites hardest and would have been
+   * found last: the surface does not climb away, it fades — so the EXECUTE
+   * controls spend the whole exit invisible and, before this fix, live.
+   */
+  it("holds under prefers-reduced-motion, where the exit is a pure fade", async () => {
+    preferReducedMotion();
+    const user = userEvent.setup();
+    await toVerdict();
 
-      await user.click(screen.getByRole("button", { name: EXECUTED_RECOMMENDATION }));
-      const confirm = await screen.findByRole("button", { name: "Confirm" });
+    await user.click(screen.getByRole("button", { name: EXECUTED_RECOMMENDATION }));
+    const confirm = await screen.findByRole("button", { name: "Confirm" });
 
-      dispatch(() => useIncidentStore.getState().completeAscent());
+    dispatch(() => useIncidentStore.getState().completeAscent());
 
-      const surface = surfaceEl();
-      // Mid-fade: still painted, still on top of the whole viewport.
-      await acrossFrames(() => expect(Number(surface?.style.opacity)).toBeLessThan(0.9));
-      expect(overlay()).not.toBeNull();
+    const surface = surfaceEl();
+    // Mid-fade: still painted, still on top of the whole viewport.
+    await acrossFrames(() => expect(Number(surface?.style.opacity)).toBeLessThan(0.9));
+    expect(overlay()).not.toBeNull();
 
-      await expect(user.click(confirm)).rejects.toThrow(/pointer-events/);
-      expect(sent).toEqual([]);
-    });
+    await expect(user.click(confirm)).rejects.toThrow(/pointer-events/);
+    expect(sent).toEqual([]);
+  });
 
-    it("takes the leaving surface out of the a11y tree and the hit test, and not before", async () => {
-      await toVerdict();
-      const layer = overlay()!;
+  it("takes the leaving surface out of the a11y tree and the hit test, and not before", async () => {
+    await toVerdict();
+    const layer = overlay()!;
 
-      // While it is the operator's surface it is a live modal, untouched.
-      expect(layer).not.toHaveAttribute("inert");
-      expect(layer.style.pointerEvents).toBe("");
-      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    // While it is the operator's surface it is a live modal, untouched.
+    expect(layer).not.toHaveAttribute("inert");
+    expect(layer.style.pointerEvents).toBe("");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
 
-      dispatch(() => useIncidentStore.getState().completeAscent());
+    dispatch(() => useIncidentStore.getState().completeAscent());
 
-      // The latch is for display: what it shows is frozen, what it does is over.
-      expect(layer).toHaveAttribute("inert");
-      expect(layer.style.pointerEvents).toBe("none");
-    });
-  },
-);
+    // The latch is for display: what it shows is frozen, what it does is over.
+    expect(layer).toHaveAttribute("inert");
+    expect(layer.style.pointerEvents).toBe("none");
+  });
+});
 
 /**
  * (2): the link is part of what the surface is *showing*.
@@ -310,147 +329,196 @@ describe(
  * the live hook reports `resumed` again — which is *true of the store* and a lie
  * about the scan on screen.
  */
-describe(
-  "DescentStage — the link the surface is showing",
-  { timeout: 60_000 },
-  () => {
-    /** The live hook, outside the stage — proof the fixed surface is diverging. */
-    function LiveLink() {
-      const link = useScanLink();
-      return <span data-testid="live-link">{link}</span>;
+describe("DescentStage — the link the surface is showing", () => {
+  /** The live hook, outside the stage — proof the fixed surface is diverging. */
+  function LiveLink() {
+    const link = useScanLink();
+    return <span data-testid="live-link">{link}</span>;
+  }
+
+  const liveLink = () => screen.getByTestId("live-link").textContent;
+
+  const holdLines = () =>
+    logSpy.calls.filter((c) => c.kinds.includes("hold")).map((c) => c.texts.at(-1));
+
+  it("does not append a link line to a scan that has ended", async () => {
+    render(
+      <>
+        <LiveLink />
+        <DescentOverlay unitId="N-07" />
+      </>,
+    );
+    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    await waitFor(() => expect(overlay()).not.toBeNull());
+
+    // The drop and the restore, both before the first walk line lands.
+    dispatch(() => useFleetStore.setState({ connection: "reconnecting" }));
+    await acrossFrames(() => expect(liveLink()).toBe("lost"));
+    dispatch(() => useFleetStore.setState({ connection: "open" }));
+    await acrossFrames(() => expect(liveLink()).toBe("resumed"));
+
+    // Positive control: while the hold is *true* the log says so, at the tail.
+    await acrossFrames(() =>
+      expect(holdLines()).toContain("HOLD — LINK RESTORED · AWAITING SEQUENCE"),
+    );
+
+    // The sequence continues; the hold goes away on its own.
+    dispatch(() => {
+      const store = useIncidentStore.getState();
+      for (const path of ["/sys/core/heartbeat.svc", "/firmware/gait/walk_cycle.ko"]) {
+        store.applyDiagEvent(ev({ k: "walk", path }));
+      }
+      store.applyDiagEvent(
+        ev({ k: "channel", joint: "knee_L", wave: [0, 1, 0, -1], ref: [0, 1, 0, -1] }),
+      );
+      store.applyDiagEvent(
+        ev({ k: "flag", joint: "knee_L", component: "actuator_A07", anomaly: "gain" }),
+      );
+      store.applyDiagEvent(ev({ k: "verdict", report: REPORT }));
+    });
+    await acrossFrames(() => expect(liveLink()).toBe("open"));
+
+    // What the log had settled on when the scan concluded.
+    const concluded = logSpy.calls.at(-1)!;
+    expect(concluded.link).toBe("open");
+    expect(concluded.kinds).not.toContain("hold");
+
+    // RETURN. Everything from here is the finished scan leaving.
+    logSpy.calls.length = 0;
+    dispatch(() => useIncidentStore.getState().completeAscent());
+
+    for (let frame = 0; frame < 240 && overlay() !== null; frame += 1) {
+      await nextFrame();
     }
+    expect(overlay()).toBeNull(); // the ascent actually finished
 
-    const liveLink = () => screen.getByTestId("live-link").textContent;
+    // The hook is lying, exactly as described — this is not a vacuous test…
+    expect(liveLink()).toBe("resumed");
+    // …and the scan that is leaving never repeats it. With all three of the
+    // projection's inputs held, the memo in ScanLog has nothing to invalidate
+    // it and the log is not rebuilt at all — which is the point, and is why
+    // this is stated as "never a held link" rather than as a call count.
+    expect(holdLines()).toEqual([]);
+    expect(logSpy.calls.filter((c) => c.link !== "open")).toEqual([]);
+  });
 
-    const holdLines = () =>
-      logSpy.calls.filter((c) => c.kinds.includes("hold")).map((c) => c.texts.at(-1));
-
-    it("does not append a link line to a scan that has ended", async () => {
-      render(
-        <>
-          <LiveLink />
-          <DescentOverlay unitId="N-07" />
-        </>,
+  it("never prints HOLD in the header or the status rule on the way out", async () => {
+    render(
+      <>
+        <LiveLink />
+        <DescentOverlay unitId="N-07" />
+      </>,
+    );
+    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    await waitFor(() => expect(overlay()).not.toBeNull());
+    dispatch(() => useFleetStore.setState({ connection: "reconnecting" }));
+    await acrossFrames(() => expect(liveLink()).toBe("lost"));
+    dispatch(() => useFleetStore.setState({ connection: "open" }));
+    await acrossFrames(() => expect(liveLink()).toBe("resumed"));
+    dispatch(() => {
+      const store = useIncidentStore.getState();
+      store.applyDiagEvent(ev({ k: "walk", path: "/firmware/gait/walk_cycle.ko" }));
+      store.applyDiagEvent(
+        ev({ k: "flag", joint: "knee_L", component: "actuator_A07", anomaly: "gain" }),
       );
-      dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
-      await waitFor(() => expect(overlay()).not.toBeNull());
-
-      // The drop and the restore, both before the first walk line lands.
-      dispatch(() => useFleetStore.setState({ connection: "reconnecting" }));
-      await acrossFrames(() => expect(liveLink()).toBe("lost"));
-      dispatch(() => useFleetStore.setState({ connection: "open" }));
-      await acrossFrames(() => expect(liveLink()).toBe("resumed"));
-
-      // Positive control: while the hold is *true* the log says so, at the tail.
-      await acrossFrames(() =>
-        expect(holdLines()).toContain("HOLD — LINK RESTORED · AWAITING SEQUENCE"),
-      );
-
-      // The sequence continues; the hold goes away on its own.
-      dispatch(() => {
-        const store = useIncidentStore.getState();
-        for (const path of ["/sys/core/heartbeat.svc", "/firmware/gait/walk_cycle.ko"]) {
-          store.applyDiagEvent(ev({ k: "walk", path }));
-        }
-        store.applyDiagEvent(
-          ev({ k: "channel", joint: "knee_L", wave: [0, 1, 0, -1], ref: [0, 1, 0, -1] }),
-        );
-        store.applyDiagEvent(
-          ev({ k: "flag", joint: "knee_L", component: "actuator_A07", anomaly: "gain" }),
-        );
-        store.applyDiagEvent(ev({ k: "verdict", report: REPORT }));
-      });
-      await acrossFrames(() => expect(liveLink()).toBe("open"));
-
-      // What the log had settled on when the scan concluded.
-      const concluded = logSpy.calls.at(-1)!;
-      expect(concluded.link).toBe("open");
-      expect(concluded.kinds).not.toContain("hold");
-
-      // RETURN. Everything from here is the finished scan leaving.
-      logSpy.calls.length = 0;
-      dispatch(() => useIncidentStore.getState().completeAscent());
-
-      for (let frame = 0; frame < 240 && overlay() !== null; frame += 1) {
-        await nextFrame();
-      }
-      expect(overlay()).toBeNull(); // the ascent actually finished
-
-      // The hook is lying, exactly as described — this is not a vacuous test…
-      expect(liveLink()).toBe("resumed");
-      // …and the scan that is leaving never repeats it. With all three of the
-      // projection's inputs held, the memo in ScanLog has nothing to invalidate
-      // it and the log is not rebuilt at all — which is the point, and is why
-      // this is stated as "never a held link" rather than as a call count.
-      expect(holdLines()).toEqual([]);
-      expect(logSpy.calls.filter((c) => c.link !== "open")).toEqual([]);
+      store.applyDiagEvent(ev({ k: "verdict", report: REPORT }));
     });
+    await acrossFrames(() => expect(liveLink()).toBe("open"));
 
-    it("never prints HOLD in the header or the status rule on the way out", async () => {
-      render(
-        <>
-          <LiveLink />
-          <DescentOverlay unitId="N-07" />
-        </>,
-      );
-      dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
-      await waitFor(() => expect(overlay()).not.toBeNull());
-      dispatch(() => useFleetStore.setState({ connection: "reconnecting" }));
-      await acrossFrames(() => expect(liveLink()).toBe("lost"));
-      dispatch(() => useFleetStore.setState({ connection: "open" }));
-      await acrossFrames(() => expect(liveLink()).toBe("resumed"));
-      dispatch(() => {
-        const store = useIncidentStore.getState();
-        store.applyDiagEvent(ev({ k: "walk", path: "/firmware/gait/walk_cycle.ko" }));
-        store.applyDiagEvent(
-          ev({ k: "flag", joint: "knee_L", component: "actuator_A07", anomaly: "gain" }),
-        );
-        store.applyDiagEvent(ev({ k: "verdict", report: REPORT }));
-      });
-      await acrossFrames(() => expect(liveLink()).toBe("open"));
+    dispatch(() => useIncidentStore.getState().completeAscent());
 
-      dispatch(() => useIncidentStore.getState().completeAscent());
-
-      const words = new Set<string>();
-      for (let frame = 0; frame < 240 && overlay() !== null; frame += 1) {
-        const text = (overlay()?.textContent ?? "").replace(/\s+/g, " ");
-        words.add(/SCANNING|VERDICT|HOLD/.exec(text)?.[0] ?? "none");
-        await nextFrame();
-      }
-      expect(overlay()).toBeNull();
-      expect(liveLink()).toBe("resumed");
-      expect([...words]).toEqual(["VERDICT"]);
-    });
-  },
-);
+    const words = new Set<string>();
+    for (let frame = 0; frame < 240 && overlay() !== null; frame += 1) {
+      const text = (overlay()?.textContent ?? "").replace(/\s+/g, " ");
+      words.add(/SCANNING|VERDICT|HOLD/.exec(text)?.[0] ?? "none");
+      await nextFrame();
+    }
+    expect(overlay()).toBeNull();
+    expect(liveLink()).toBe("resumed");
+    expect([...words]).toEqual(["VERDICT"]);
+  });
+});
 
 /**
- * The ascent's ramp, measured rather than asserted from the source.
+ * The ascent's ramp, read off an injected clock.
  *
  * The fix above adds two attributes to the layer and touches no variant, but
- * "the choreography is unchanged" is the one claim here that a reader
- * cannot check by eye — so it is fitted. Each sample pairs a wall-clock reading
- * with what framer had written on the element at that moment, and the fit
- * recovers the *duration constant* of the curve. That is the reading that
- * cannot be moved by scheduling: a starved frame loop takes fewer samples of
- * the same curve, never a different curve, because framer stamps its own
- * `performance.now()` on every frame it processes and nothing here seeds a
- * time from a commit.
+ * "the choreography is unchanged" is the one claim here that a reader cannot
+ * check by eye — so it is stated frame by frame. This used to be a wall-clock
+ * measurement: samples of `performance.now()` against what framer had written,
+ * least-squares-fitted to recover the duration, with a ±15–20 ms tolerance to
+ * absorb scheduling. Under a loaded suite the fit failed, because the tolerance
+ * was a guess about the machine rather than a fact about the curve.
+ *
+ * So the machine is taken out of it. framer's frameloop schedules itself with
+ * `requestAnimationFrame` and reads `performance.now()` for its timestamps; both
+ * are stubbed here the way frame-loop.test.ts stubs them, and the test owns the
+ * clock. Every frame is dealt at a time the test chose, so every reading has an
+ * exact expected value — `1 - t/D` for the linear fade, the wipe's own cubic
+ * bezier for the travel — and the assertion is equality, not a fit. Load can
+ * make this slower; it cannot make it read a different number.
  */
-describe("DescentStage — the ascent's choreography", { timeout: 60_000 }, () => {
-  /** Least squares through (x, y). */
-  function fitLine(points: Array<[number, number]>): { slope: number; residual: number } {
-    const n = points.length;
-    const mx = points.reduce((a, [x]) => a + x, 0) / n;
-    const my = points.reduce((a, [, y]) => a + y, 0) / n;
-    const sxy = points.reduce((a, [x, y]) => a + (x - mx) * (y - my), 0);
-    const sxx = points.reduce((a, [x]) => a + (x - mx) ** 2, 0);
-    const slope = sxy / sxx;
-    const intercept = my - slope * mx;
-    const residual = Math.max(
-      ...points.map(([x, y]) => Math.abs(y - (slope * x + intercept))),
-    );
-    return { slope, residual };
+describe("DescentStage — the ascent's choreography", () => {
+  /** Scheduled-but-not-yet-run frames, keyed the way the platform keys them. */
+  let queue = new Map<number, FrameRequestCallback>();
+  /** What `performance.now()` answers, in ms. Moves only when a frame is dealt. */
+  let clock = 0;
+
+  beforeEach(() => {
+    queue = new Map();
+    clock = 10_000;
+    let handle = 0;
+    // Nothing schedules itself: framer, the shared frame loop and the board's
+    // own measure pass all land in the queue and run when a frame is dealt.
+    frameScheduler.request = (cb) => {
+      handle += 1;
+      queue.set(handle, cb);
+      return handle;
+    };
+    frameScheduler.cancel = (h) => {
+      queue.delete(h);
+    };
+    vi.spyOn(performance, "now").mockImplementation(() => clock);
+  });
+
+  afterEach(() => {
+    // Hand the scheduler back with nothing owed. framer's batcher remembers
+    // that it asked for a frame, and a frame left in this queue when the test
+    // ends is one it would wait on forever — every animation in the tests that
+    // follow would then be scheduled behind it and never run. So: unmount,
+    // which stops every animation, then deal frames until nothing re-arms.
+    cleanup();
+    for (let i = 0; i < 100 && queue.size > 0; i += 1) {
+      clock += 16;
+      const due = [...queue.values()];
+      queue.clear();
+      for (const cb of due) cb(clock);
+    }
+    expect(queue.size).toBe(0);
+    frameScheduler.request = frameScheduler.real.request;
+    frameScheduler.cancel = frameScheduler.real.cancel;
+  });
+
+  /**
+   * Set the clock to `t` and deal one frame there, then let what the frame
+   * queued drain: framer reports a finished animation through a promise chain
+   * and React commits `onDismissed` off the end of it, so the frame is followed
+   * by a macrotask turn before the next reading is taken.
+   */
+  async function frameAt(t: number): Promise<void> {
+    clock = t;
+    await act(async () => {
+      const due = [...queue.values()];
+      queue.clear();
+      for (const cb of due) cb(t);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  /** Deal frames at `step` ms intervals until `until` holds (or the budget is spent). */
+  async function frames(until: () => boolean, step = 50, budget = 80): Promise<void> {
+    for (let i = 0; i < budget && !until(); i += 1) await frameAt(clock + step);
+    expect(until()).toBe(true);
   }
 
   /** cubic-bezier(x1,y1,x2,y2) evaluated at a time fraction, CSS semantics. */
@@ -469,7 +537,7 @@ describe("DescentStage — the ascent's choreography", { timeout: 60_000 }, () =
     let t = x;
     for (let i = 0; i < 60; i += 1) {
       const vx = ((ax * t + bx) * t + cx) * t;
-      if (Math.abs(vx - x) < 1e-7) break;
+      if (Math.abs(vx - x) < 1e-9) break;
       if (vx > x) hi = t;
       else lo = t;
       t = (lo + hi) / 2;
@@ -477,91 +545,83 @@ describe("DescentStage — the ascent's choreography", { timeout: 60_000 }, () =
     return ((ay * t + by) * t + cy) * t;
   }
 
-  /** Invert the ease: what time fraction produces this much travel? */
-  function bezierProgress(
-    ease: readonly [number, number, number, number],
-    y: number,
-  ): number {
-    let lo = 0;
-    let hi = 1;
-    for (let i = 0; i < 60; i += 1) {
-      const mid = (lo + hi) / 2;
-      if (bezierAt(ease, mid) > y) hi = mid;
-      else lo = mid;
-    }
-    return (lo + hi) / 2;
+  /** The board — the only element child of the dialog; the edge and the beat are spans. */
+  const boardEl = () =>
+    document.querySelector<HTMLElement>("[data-descent-layer] [role='dialog'] > div");
+
+  /** What the surface has written for its travel, as a 0–1 fraction of the way down. */
+  function travel(): number | null {
+    const y = /translateY\(([\d.]+)%\)/.exec(surfaceEl()?.style.transform ?? "")?.[1];
+    return y === undefined ? null : Number(y) / 100;
   }
 
-  /** Sample the leaving surface every frame from RETURN until it is gone. */
-  async function sampleAscent(
-    read: (el: HTMLElement) => number | null,
-  ): Promise<Array<[number, number]>> {
-    const t0 = performance.now();
-    dispatch(() => useIncidentStore.getState().completeAscent());
-    const samples: Array<[number, number]> = [];
-    for (let frame = 0; frame < 240 && overlay() !== null; frame += 1) {
-      const el = surfaceEl();
-      const value = el ? read(el) : null;
-      if (value !== null) samples.push([performance.now() - t0, value]);
-      await nextFrame();
-    }
-    expect(overlay()).toBeNull();
-    return samples;
-  }
-
-  it("fades on the reduced timeline's linear 200 ms ramp", async () => {
+  it("fades on the reduced timeline's linear 200 ms ramp, the board gone at 120", async () => {
     preferReducedMotion();
     await toVerdict();
-    await acrossFrames(() => expect(surfaceEl()?.style.opacity).toBe("1"));
+    // Let the arrival land, or "away" starts from wherever the fade-in got to.
+    await frames(() => surfaceEl()?.style.opacity === "1");
 
-    const samples = await sampleAscent((el) => {
-      const o = Number(el.style.opacity);
-      // Drop the clamped ends: framer holds 1 until its first frame, and the
-      // last commit before unmount can read 0. The ramp is what is between.
-      return Number.isFinite(o) && o > 0 && o < 1 ? o : null;
-    });
+    const t0 = clock;
+    dispatch(() => useIncidentStore.getState().completeAscent());
+    // Frame zero: the exit is aimed on the clock it was asked for, and nothing
+    // has moved yet.
+    await frameAt(t0);
+    expect(Number(surfaceEl()?.style.opacity)).toBe(1);
 
-    expect(samples.length).toBeGreaterThanOrEqual(3);
-    // Monotone, and it really does get most of the way down.
-    const values = samples.map(([, o]) => o);
-    expect(values).toEqual([...values].sort((a, b) => b - a));
-    expect(values.at(-1)!).toBeLessThan(0.15);
+    const { ascentWipeMs, boardExitMs } = descentTimeline(true);
+    expect(ascentWipeMs).toBe(200);
+    expect(boardExitMs).toBe(120);
 
-    // opacity = 1 - t / D → the fitted slope is -1/D.
-    const { slope, residual } = fitLine(samples);
-    const duration = -1 / slope;
-    const declared = descentTimeline(true).ascentWipeMs;
-    expect(declared).toBe(200);
-    expect(Math.abs(duration - declared)).toBeLessThanOrEqual(15);
-    expect(residual).toBeLessThanOrEqual(0.03);
+    // opacity = 1 - t / D, at every frame dealt, exactly.
+    for (const t of [20, 60, 100, 120, 160, 180]) {
+      await frameAt(t0 + t);
+      expect(overlay()).not.toBeNull();
+      expect(Number(surfaceEl()?.style.opacity)).toBeCloseTo(1 - t / ascentWipeMs, 6);
+      // The instrument leaves ahead of the surface, so the fade carries black
+      // rather than a half-erased board: by its own shorter ramp's end it is
+      // gone while the surface is still most of the way up. (Only the order is
+      // readable here — the board's variants declare no opacity origin, so
+      // framer takes it from computed style, which jsdom does not lay out, and
+      // the ramp itself collapses to its target.)
+      if (t >= boardExitMs) expect(Number(boardEl()?.style.opacity)).toBe(0);
+    }
+
+    // The frame the ramp ends on is the frame the surface reports done, and
+    // the gate takes it down in the same turn.
+    await frameAt(t0 + ascentWipeMs);
+    expect(overlay()).toBeNull();
   });
 
   it("wipes back down on the full timeline's 250 ms EASE_WIPE", async () => {
     await toVerdict();
-    await acrossFrames(() => expect(surfaceEl()?.style.transform).toBe("none"));
+    await frames(() => surfaceEl()?.style.transform === "none");
 
-    const samples = await sampleAscent((el) => {
-      const y = /translateY\(([\d.]+)%\)/.exec(el.style.transform)?.[1];
-      if (y === undefined) return null;
-      const travel = Number(y) / 100;
-      return travel > 0 && travel < 1 ? travel : null;
-    });
+    const t0 = clock;
+    dispatch(() => useIncidentStore.getState().completeAscent());
+    await frameAt(t0);
+    expect(travel()).toBeNull(); // still `none`: nothing has moved
 
-    expect(samples.length).toBeGreaterThanOrEqual(3);
-    const values = samples.map(([, y]) => y);
-    expect(values).toEqual([...values].sort((a, b) => a - b));
-    expect(values.at(-1)!).toBeGreaterThan(0.9);
+    const { ascentWipeMs } = descentTimeline(false);
+    expect(ascentWipeMs).toBe(250);
 
-    // Invert the ease and the curve becomes a line whose slope is the
-    // duration — so the ease and the length are both under assertion.
-    const progress = samples.map(
-      ([t, y]) => [bezierProgress(EASE_WIPE, y), t] as [number, number],
-    );
-    const { slope, residual } = fitLine(progress);
-    const declared = descentTimeline(false).ascentWipeMs;
-    expect(declared).toBe(250);
-    expect(Math.abs(slope - declared)).toBeLessThanOrEqual(20);
-    expect(residual).toBeLessThanOrEqual(12);
+    // y = ease(t / D), at every frame dealt: the ease and the length are both
+    // under assertion, and neither is fitted.
+    const readings: number[] = [];
+    for (const t of [10, 50, 100, 125, 150, 200, 240]) {
+      await frameAt(t0 + t);
+      expect(overlay()).not.toBeNull();
+      const y = travel();
+      expect(y).not.toBeNull();
+      readings.push(y!);
+      expect(Math.abs(y! - bezierAt(EASE_WIPE, t / ascentWipeMs))).toBeLessThan(1e-3);
+    }
+    // Monotone, and steep first: three quarters of the way down inside the
+    // first 40 % of the wipe, which is what reads as weight.
+    expect(readings).toEqual([...readings].sort((a, b) => a - b));
+    expect(readings[2]!).toBeGreaterThan(0.75);
+
+    await frameAt(t0 + ascentWipeMs);
+    expect(overlay()).toBeNull();
   });
 });
 
@@ -574,7 +634,7 @@ describe("DescentStage — the ascent's choreography", { timeout: 60_000 }, () =
  * (`exiting`) — which buys the link fix at the root (the describe above) and
  * costs three things a ref never had to answer for.
  */
-describe("DescentStage — the departing snapshot", { timeout: 60_000 }, () => {
+describe("DescentStage — the departing snapshot", () => {
   const store = () => useIncidentStore.getState();
 
   function seedUnit() {

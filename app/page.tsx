@@ -1,16 +1,15 @@
 import Link from "next/link";
+import { ConsoleCard, ConsoleHeader } from "@/components/console";
 import {
   AlertFeedControls,
   AlertRail,
   CohortCard,
-  ConsoleCard,
-  ConsoleHeader,
   FleetKpis,
   FleetMap,
   FleetRail,
   FleetUnitCount,
   LiveConnectionStatus,
-} from "@/components/console";
+} from "@/components/fleet";
 
 /**
  * The operator shell.
@@ -64,7 +63,10 @@ export default function FleetPage() {
           a document when the shell needs more than the viewport, which is what
           keeps a short window from clipping a region against the footer.
           Verified at SIM_UNITS=500: eight rows tall, the rest scrolls inside. */}
-      <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-6 px-5 py-6 sm:gap-8 sm:px-8 sm:py-8 md:gap-10 md:px-16 md:py-10 lg:px-24">
+      <main
+        id="main"
+        className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-6 px-5 py-6 sm:gap-8 sm:px-8 sm:py-8 md:gap-10 md:px-16 md:py-10 lg:px-24"
+      >
         {/* The document owes a screen reader an h1; a sighted operator already
             has the mark and the KPI band, and a display heading here would be
             the loudest thing on a page whose whole point is that nothing is

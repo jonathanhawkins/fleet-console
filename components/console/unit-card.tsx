@@ -1,11 +1,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { type Posture, type UnitStatus } from "@/lib/schema";
-import { type TrendingUnit } from "@/lib/stores";
 import { cn } from "@/lib/utils";
 import { PostureTag, postureLabel } from "./posture-tag";
 import { StatusChip } from "./status-chip";
-import { trendDetail, trendSpeech } from "./trend-watch";
+import { trendDetail, trendSpeech, type UnitTrend } from "./trend-watch";
 import { unitStatusChip, unitStatusCopy } from "./unit-status";
 
 /**
@@ -84,7 +83,7 @@ export interface UnitCardProps extends Omit<
    * moment a unit stops being nominal, so this line and an ATTENTION chip can
    * never appear on the same row arguing about severity.
    */
-  trend?: TrendingUnit | null;
+  trend?: UnitTrend | null;
   /** Where the row navigates. Defaults to the unit's drill-in route. */
   href?: string;
 }

@@ -42,7 +42,7 @@ import { cn } from "@/lib/utils";
  * unit page's initial JS (PRD §7).
  *
  * The three beats (PRD §5) are owned in two places on purpose. Beat 1, the
- * operator page draining, belongs to the gate in components/console: it is one
+ * operator page draining, belongs to the gate in components/fleet: it is one
  * attribute on `<html>` and it has to start the instant `scan_start` lands,
  * before this chunk has necessarily resolved. Beats 2 and 3 — the surface
  * wiping bottom-to-top, then the chrome booting in a stagger — belong here,
@@ -252,7 +252,7 @@ function DescentSurface({
    * *cancellable* from the UI, there is still no abort control, and pressing
    * Escape mid-scan does not stop or hide a thing: the session goes on
    * accumulating in the store and the unit page says so with a way back in.
-   * What changed is that a modal with no exit for twenty-five seconds is a cell,
+   * What changed is that a modal with no exit for fifteen seconds is a cell,
    * and the keyboard is owed the same door the header now has.
    *
    * The handler runs in every phase now, so it is registered once rather than
@@ -545,21 +545,35 @@ function DescentSurface({
                       what it was holding it for, and putting the card here rather
                       than in a modal keeps every piece of evidence that produced
                       it on screen behind it. */}
-                  <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-                    <StatusBoard />
-                    {/* Presence, so the card can leave the way it arrived. Its
-                        fade lives in boot.verdict; all this does is hold the
-                        subtree mounted long enough for the fade to play, which
-                        is what makes minimize and restore the same gesture in
-                        two directions rather than one animation and one
-                        deletion. */}
-                    <AnimatePresence>
-                      {showVerdict && session && !sheetWidth ? (
-                        <div key="verdict" className="px-3 pb-3">
-                          <VerdictCard session={session} onMinimize={minimizeVerdict} />
-                        </div>
-                      ) : null}
-                    </AnimatePresence>
+                  {/* Two boxes, and the split is load-bearing. The inner one
+                      scrolls; the outer one is positioned and does not. A
+                      command's confirmation (execute-action.tsx) pins itself
+                      to the foot of the OUTER box — the column's visible
+                      edge, not the scroll content — which is what lets the
+                      gate open and close without the column moving under
+                      the manifest and the elevation. `.scan-grid` is the
+                      only other positioned ancestor, and a gate anchored to
+                      that would straddle all three columns. */}
+                  <div
+                    data-slot="verdict-column"
+                    className="relative flex min-h-0 flex-1 flex-col"
+                  >
+                    <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+                      <StatusBoard />
+                      {/* Presence, so the card can leave the way it arrived. Its
+                          fade lives in boot.verdict; all this does is hold the
+                          subtree mounted long enough for the fade to play, which
+                          is what makes minimize and restore the same gesture in
+                          two directions rather than one animation and one
+                          deletion. */}
+                      <AnimatePresence>
+                        {showVerdict && session && !sheetWidth ? (
+                          <div key="verdict" className="px-3 pb-3">
+                            <VerdictCard session={session} onMinimize={minimizeVerdict} />
+                          </div>
+                        ) : null}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 </ScanPanel>
                 <ScanPanel

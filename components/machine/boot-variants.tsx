@@ -78,7 +78,7 @@ function build(t: DescentTimeline): BootVariants {
       hidden: { opacity: 0 },
       shown: { opacity: 1, transition: { duration: secs(t.bootMs), ease: "linear" } },
       // No drift. A 6 px downward slide toward the status rule was built and
-      // looked at side by side (docs/evidence/phase-9/card-exit-drift-{0,6}px.png):
+      // looked at side by side at 0 px and 6 px of drift:
       // the card carries its own top rule, so the drift slides a 1 px rule off
       // the board's lattice and hangs the MINIMIZE box below every other chip
       // in the column for the length of the fade. On this material that reads

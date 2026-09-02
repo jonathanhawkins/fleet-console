@@ -41,12 +41,19 @@ const snapshot: FleetSnapshotMessage = {
   ],
 };
 
-/** Feed `seconds` of 10 Hz batches; `ramps` maps joint → °C/min climb. */
+/**
+ * Feed `seconds` of 10 Hz batches; `ramps` maps joint → °C/min climb from
+ * `base` °C. The watch judges every batch as it lands, so a feed that
+ * continues an earlier one must start where it left off (`after`) — a
+ * temperature that steps back to 33 °C between two feeds is a cliff, and a
+ * cliff fits as a fall.
+ */
 function feed(
   unitId: string,
   seconds: number,
   ramps: Record<string, number> = {},
   startTs = 1_000_000,
+  base = 33,
 ): void {
   const { applyTelemetry } = useFleetStore.getState();
   for (let i = 0; i < seconds * 10; i += 1) {
@@ -58,7 +65,7 @@ function feed(
       ts,
       batch: JOINTS.map((joint) => ({
         joint,
-        tempC: 33 + (ramps[joint] ?? 0) * minutes,
+        tempC: base + (ramps[joint] ?? 0) * minutes,
         torqueNm: 12,
         currentA: 1.5,
         battery: 80,
@@ -67,6 +74,10 @@ function feed(
     applyTelemetry(msg);
   }
 }
+
+/** Where a `feed` of `seconds` at `cPerMin` from `base` leaves the temperature. */
+const after = (base: number, cPerMin: number, seconds: number): number =>
+  base + cPerMin * (seconds / 60);
 
 const trending = () => selectTrendingUnits(useFleetStore.getState());
 
@@ -113,11 +124,12 @@ describe("selectTrendingUnits", () => {
     // Continue between exit and enter: a fresh unit would not flag, a latched
     // one must hold.
     const between = (TREND_ENTER_C_PER_MIN + TREND_EXIT_C_PER_MIN) / 2;
-    feed("N-07", 20, { knee_L: between }, 1_000_000 + 20_000);
+    const knee = after(33, 20, 20);
+    feed("N-07", 20, { knee_L: between }, 1_000_000 + 20_000, knee);
     expect(trending()).toHaveLength(1);
 
     // Flatten out: below exit, the watch lets go.
-    feed("N-07", 20, {}, 1_000_000 + 40_000);
+    feed("N-07", 20, {}, 1_000_000 + 40_000, after(knee, between, 20));
     expect(trending()).toEqual([]);
   });
 
@@ -149,11 +161,11 @@ describe("selectTrendingUnits", () => {
 
 /**
  * The derivation's SCOPE is a contract, not an implementation detail.
- * A batch carries one unit; keying the memo on `telemetryVersion` — which
- * changes on every batch, any unit — re-fitted the whole fleet ten times a
- * second per unit. Measured, that was 0.7 ms of main thread per wall second at
- * eight units and 39 SECONDS per wall second at five hundred, on a page that
- * owes 60 fps. The fits below are counted for exactly that reason.
+ * A batch carries one unit; a watch that re-judged the whole fleet on every
+ * batch, any unit, re-fitted the fleet ten times a second per unit. Measured,
+ * that was 0.7 ms of main thread per wall second at eight units and 39
+ * SECONDS per wall second at five hundred, on a page that owes 60 fps. The
+ * fits below are counted for exactly that reason.
  */
 describe("selectTrendingUnits — what one batch costs", () => {
   it("re-fits the unit whose samples moved, and no other", () => {

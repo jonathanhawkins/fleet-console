@@ -18,7 +18,7 @@ import {
   type DiagSession,
 } from "@/lib/stores";
 import { type TelemetryTransport } from "@/lib/transport";
-import { setCommandTransport } from "@/components/console";
+import { setCommandTransport } from "@/components/fleet/telemetry-command";
 import { CommandStatusLine } from "./execute-action";
 import { SafeSitAction } from "./safe-sit";
 import {

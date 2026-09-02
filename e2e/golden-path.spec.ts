@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
  * The golden path, end to end, against the static WorkerTransport build —
@@ -38,6 +38,62 @@ function trackChunks(page: Page): ChunkLog {
     }
   });
   return log;
+}
+
+/** Computed `transform` values that mean "this element is not translated". */
+const IDENTITY = ["none", "matrix(1, 0, 0, 1, 0, 0)"];
+
+/**
+ * A token, as the browser resolves it inside machine space. A probe is the
+ * only honest way to read one: `--alert` is `var(--alert-red)` is `#ff3b30`,
+ * and comparing that string against a computed `rgb(...)` would be the test
+ * re-implementing the colour parser. Painting the token onto a throwaway
+ * element and reading the computed value back is the browser doing it.
+ */
+function machineToken(overlay: Locator, name: string): Promise<string> {
+  return overlay.evaluate((dialog, token) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(${token})`;
+    dialog.appendChild(probe);
+    const value = getComputedStyle(probe).color;
+    probe.remove();
+    return value;
+  }, name);
+}
+
+/**
+ * What one channel strip has actually painted, counted off its own pixels.
+ *
+ * The strips are canvases (non-negotiable #3), so there is no DOM to ask what
+ * colour the knee's trace is. `getImageData` on the canvas the deck draws into
+ * is the platform-independent version of a screenshot: it reads the exact
+ * bytes this build put there, on any OS, with no baseline to keep. "Red" is
+ * the alert token's neighbourhood (#ff3b30 — red high, green and blue low),
+ * which no phosphor, amber or reference-trace pixel can enter; the alpha floor
+ * drops anti-aliasing fringe so a healthy strip counts exactly zero.
+ */
+function stripPixels(
+  overlay: Locator,
+  joint: string,
+): Promise<{ red: number; painted: number }> {
+  return overlay.locator(`.wave-strip[data-joint="${joint}"] canvas`).evaluate((el) => {
+    const canvas = el as HTMLCanvasElement;
+    const ctx = canvas.getContext("2d");
+    if (!ctx || canvas.width === 0 || canvas.height === 0)
+      return { red: -1, painted: -1 };
+    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let red = 0;
+    let painted = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if ((data[i + 3] ?? 0) < 64) continue;
+      painted += 1;
+      const r = data[i] ?? 0;
+      const g = data[i + 1] ?? 0;
+      const b = data[i + 2] ?? 0;
+      if (r > 200 && g < 120 && b < 120) red += 1;
+    }
+    return { red, painted };
+  });
 }
 
 test("fleet alert → drill-in → descent → verdict → ascent with incident logged", async ({
@@ -94,6 +150,57 @@ test("fleet alert → drill-in → descent → verdict → ascent with incident 
   const overlay = page.getByRole("dialog", { name: /Diagnostic scan, unit N-07/ });
   await expect(overlay).toBeVisible({ timeout: 10_000 });
 
+  // --- The descent, as pixels: the surface lands and the page is gone ------
+  // The moving element is the dialog's parent (translateY 100% → 0 over the
+  // 350 ms wipe). Once it has landed, three things are true of the screen and
+  // none of them is a screenshot: the surface is the machine `--bg` token
+  // edge to edge, the operator page beneath it is drained (beat 1's filter on
+  // <html data-descent="under">), and nothing of that page can be hit — the
+  // element under every corner and the centre of the viewport is the descent
+  // layer's. That last one is what "covered" means, in any browser.
+  await expect
+    .poll(
+      () =>
+        overlay.evaluate((dialog, identity) => {
+          const cs = getComputedStyle(dialog.parentElement!);
+          return identity.includes(cs.transform) && Number(cs.opacity) === 1;
+        }, IDENTITY),
+      { timeout: 5_000 },
+    )
+    .toBe(true);
+  const landed = await overlay.evaluate((dialog) => {
+    const surface = dialog.parentElement!;
+    const cs = getComputedStyle(surface);
+    const stage = getComputedStyle(dialog);
+    const under = document.querySelector<HTMLElement>(
+      "body > *:not([data-descent-layer])",
+    );
+    const layer = document.querySelector("[data-descent-layer]");
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const points: Array<[number, number]> = [
+      [2, 2],
+      [w - 3, 2],
+      [2, h - 3],
+      [w - 3, h - 3],
+      [w / 2, h / 2],
+    ];
+    return {
+      transform: cs.transform,
+      opacity: Number(cs.opacity),
+      background: stage.backgroundColor,
+      drained: document.documentElement.getAttribute("data-descent"),
+      underFilter: under ? getComputedStyle(under).filter : null,
+      covered: points.every((p) => layer?.contains(document.elementFromPoint(...p))),
+    };
+  });
+  expect(IDENTITY, "surface has not landed").toContain(landed.transform);
+  expect(landed.opacity).toBe(1);
+  expect(landed.background).toBe(await machineToken(overlay, "--bg"));
+  expect(landed.drained).toBe("under");
+  expect(landed.underFilter).toMatch(/grayscale\(1\)/);
+  expect(landed.covered, "the operator page is reachable under the surface").toBe(true);
+
   // The lazy split, as bookkeeping: no chunk fetched while the operator was on
   // the fleet page contains machine-space code. (The chunk is *allowed* from
   // the unit page on: the incident banner deliberately warms it on mount so
@@ -137,10 +244,89 @@ test("fleet alert → drill-in → descent → verdict → ascent with incident 
   // --- The flag beat: KNEE_L goes DAMAGED on the manifest --------------------
   await expect(overlay.getByText("DAMAGED").first()).toBeVisible({ timeout: 15_000 });
 
+  // …and on the sweep. The knee's trace is coloured by measurement, run by
+  // run, and arrives in alert red; the hip beside it, healthy, never paints a
+  // red pixel once its own sweep cursor has passed. Polled rather than read
+  // once: the flag lands while the knee's 1.4 s reveal is still drawing, and
+  // the red run is the last third of it.
+  await expect
+    .poll(async () => (await stripPixels(overlay, "knee_L")).red, { timeout: 10_000 })
+    .toBeGreaterThan(40);
+  await expect
+    .poll(async () => stripPixels(overlay, "hip_L"), { timeout: 10_000 })
+    .toEqual({ red: 0, painted: expect.any(Number) });
+  expect((await stripPixels(overlay, "hip_L")).painted).toBeGreaterThan(100);
+
   // --- Verdict ---------------------------------------------------------------
   const headline = overlay.getByRole("heading", { name: "KNEE_L · ACTUATOR A-07" });
   await expect(headline).toBeVisible({ timeout: 15_000 });
   await expect(overlay.getByText("LEFT KNEE ACTUATOR A-07: GAIN ANOMALY")).toBeVisible();
+
+  // The loudest thing in machine space, measured: the finding is set larger
+  // than every section label around it (the panel titles and the card's own
+  // VERDICT label), and both of its lines carry the alert token — the colour
+  // read back off the same stylesheet the headline is painted from.
+  const alert = await machineToken(overlay, "--alert");
+  const type = await overlay.evaluate((dialog) => {
+    const px = (el: Element | null) => Number.parseFloat(getComputedStyle(el!).fontSize);
+    const labels = [
+      ...dialog.querySelectorAll('[data-slot="scan-panel"] > header h2'),
+    ].map(px);
+    const verdictLabel = [...dialog.querySelectorAll("span")].find(
+      (el) => el.textContent?.trim() === "Verdict",
+    );
+    const h2 = dialog.querySelector("#verdict-headline");
+    const anomaly = dialog.querySelector('[data-slot="verdict-anomaly"]');
+    return {
+      labels,
+      verdictLabel: px(verdictLabel ?? null),
+      headline: px(h2),
+      headlineColor: getComputedStyle(h2!).color,
+      anomaly: px(anomaly),
+      anomalyColor: getComputedStyle(anomaly!).color,
+    };
+  });
+  expect(type.labels.length).toBe(3);
+  for (const label of [...type.labels, type.verdictLabel]) {
+    expect(type.headline).toBeGreaterThan(label * 2);
+    expect(type.anomaly).toBeGreaterThan(label);
+  }
+  expect(type.headline).toBeGreaterThan(type.anomaly);
+  expect(type.headlineColor).toBe(alert);
+  expect(type.anomalyColor).toBe(alert);
+
+  // --- A command gate opens over the column, and the board does not move ---
+  // The confirmation is pinned to the foot of the centre column rather than
+  // grown into it, so the manifest and the elevation stay exactly where the
+  // operator was looking — on open, and on abort.
+  const column = overlay.locator('[data-slot="verdict-column"] > *').first();
+  const elevation = overlay.locator('[data-slot="wireframe-elevation"]');
+  const before = {
+    scroll: await column.evaluate((el) => el.scrollTop),
+    elevation: await elevation.boundingBox(),
+  };
+  await overlay.getByRole("button", { name: /^Command safe sit$/i }).click();
+  const gate = overlay.getByRole("alertdialog");
+  await expect(gate).toBeVisible();
+  await expect(gate.getByRole("button", { name: /^Abort$/i })).toBeFocused();
+  // The gate is on screen, inside the column, without anything having scrolled.
+  const gateBox = await gate.boundingBox();
+  const columnBox = await column.boundingBox();
+  expect(gateBox!.y + gateBox!.height).toBeLessThanOrEqual(
+    columnBox!.y + columnBox!.height + 1,
+  );
+  expect(gateBox!.y).toBeGreaterThanOrEqual(columnBox!.y);
+  expect(await column.evaluate((el) => el.scrollTop)).toBe(before.scroll);
+  expect(await elevation.boundingBox()).toEqual(before.elevation);
+  await page.keyboard.press("Escape");
+  await expect(gate).toBeHidden();
+  // Escape stopped at the gate: still in machine space, focus back on the trigger.
+  await expect(overlay).toBeVisible();
+  await expect(
+    overlay.getByRole("button", { name: /^Command safe sit$/i }),
+  ).toBeFocused();
+  expect(await column.evaluate((el) => el.scrollTop)).toBe(before.scroll);
+  expect(await elevation.boundingBox()).toEqual(before.elevation);
 
   // --- Minimize: the conclusion goes down to the status line, evidence stays --
   await overlay.getByRole("button", { name: /minimize verdict/i }).click();

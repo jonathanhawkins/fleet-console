@@ -206,7 +206,9 @@ export function StatusBoard() {
   return (
     <div
       ref={containerRef}
-      className="relative flex min-h-0 flex-1 items-stretch gap-4 overflow-auto p-3"
+      // The floor keeps the elevation and the manifest whole once the verdict
+      // card arrives beneath them; the column scrolls for the card instead.
+      className="relative flex min-h-[26rem] flex-1 items-stretch gap-4 overflow-auto p-3"
     >
       {/* Top-aligned with the manifest and sized to roughly its height. The
           drawing and the inventory are two views of one machine, and a figure

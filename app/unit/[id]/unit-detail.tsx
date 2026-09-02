@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { ConsoleButton, ConsoleCard } from "@/components/console";
 import {
   BackToFleet,
   ComponentView,
-  ConsoleButton,
-  ConsoleCard,
   DescentOverlay,
   IncidentBanner,
   IncidentHistory,
@@ -17,7 +16,7 @@ import {
   UnitIdentity,
   useHasIncidentHistory,
   useMarkUnitVisited,
-} from "@/components/console";
+} from "@/components/fleet";
 import { selectUnit, selectUnitIds, useFleetStore } from "@/lib/stores";
 
 /**

@@ -17,7 +17,7 @@ import {
   type DiagSession,
 } from "@/lib/stores";
 import { type TelemetryTransport } from "@/lib/transport";
-import { setCommandTransport } from "@/components/console";
+import { setCommandTransport } from "@/components/fleet/telemetry-command";
 import { EvidenceTrace } from "./evidence-trace";
 import {
   calibrationAmendment,
@@ -147,9 +147,7 @@ function toVerdict() {
 
 const sayRecalibrated = (ev = calibration()) =>
   act(() =>
-    useIncidentStore
-      .getState()
-      .applyDiagEvent({ t: "diag_event", unitId: "N-07", ev }),
+    useIncidentStore.getState().applyDiagEvent({ t: "diag_event", unitId: "N-07", ev }),
   );
 
 beforeEach(() => {
@@ -185,7 +183,9 @@ describe("the sit is the precondition, not the neighbour", () => {
   it("fails safe when the fleet store has never heard of the unit", () => {
     render(<VerdictCard session={session()} />);
     expect(
-      screen.getByRole("button", { name: /recalibrate joint · requires seated posture/i }),
+      screen.getByRole("button", {
+        name: /recalibrate joint · requires seated posture/i,
+      }),
     ).toBeDisabled();
   });
 
@@ -213,7 +213,9 @@ describe("the sit is the precondition, not the neighbour", () => {
     seedPosture("walking");
     render(<VerdictCard session={session()} />);
     await user.click(
-      screen.getByRole("button", { name: /recalibrate joint · requires seated posture/i }),
+      screen.getByRole("button", {
+        name: /recalibrate joint · requires seated posture/i,
+      }),
     );
     expect(sent).toEqual([]);
     expect(screen.queryByRole("alertdialog")).toBeNull();
@@ -325,12 +327,16 @@ describe("the result lands on the evidence", () => {
     // Two live traces in one frame: the ghost of what it was, and what it is.
     expect(exhibit.querySelector('[data-role="pre"]')).not.toBeNull();
     expect(exhibit.querySelector('[data-role="live"]')).not.toBeNull();
-    expect(within(exhibit as HTMLElement).getByText(/^recalibrated$/i)).toBeInTheDocument();
+    expect(
+      within(exhibit as HTMLElement).getByText(/^recalibrated$/i),
+    ).toBeInTheDocument();
     // Both readings move together or neither does.
     // Current reading in the primary row, what it came down from under it.
     expect(within(exhibit as HTMLElement).getByText(/1\.32× ref/i)).toBeInTheDocument();
     expect(within(exhibit as HTMLElement).getByText(/was 1\.75×/i)).toBeInTheDocument();
-    expect(within(exhibit as HTMLElement).getByText(/^rms Δ 0\.196$/i)).toBeInTheDocument();
+    expect(
+      within(exhibit as HTMLElement).getByText(/^rms Δ 0\.196$/i),
+    ).toBeInTheDocument();
     expect(within(exhibit as HTMLElement).getByText(/^was 0\.459$/i)).toBeInTheDocument();
   });
 
@@ -353,7 +359,9 @@ describe("the result lands on the evidence", () => {
     expect(screen.getAllByText(/gain anomaly/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/^PARTIAL · RESIDUAL 1\.32× REFERENCE/)).toBeInTheDocument();
     expect(
-      screen.getByText(/GAIN DRIFT EXCLUDED · REMAINING TENDON WEAR · ACTUATOR DEGRADATION/),
+      screen.getByText(
+        /GAIN DRIFT EXCLUDED · REMAINING TENDON WEAR · ACTUATOR DEGRADATION/,
+      ),
     ).toBeInTheDocument();
   });
 

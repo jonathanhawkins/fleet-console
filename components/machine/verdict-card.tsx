@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { clockTime, ConsoleButton, JOINTS } from "@/components/console";
+import { ConsoleButton, JOINTS } from "@/components/console";
+import { clockTime } from "@/components/fleet/alert-lifecycle";
 import { type VerdictReport } from "@/lib/schema";
 import {
   useFleetStore,
@@ -142,6 +143,13 @@ export function VerdictCard({
   const report = session.report;
   const acknowledged = session.acknowledged;
 
+  // Focus lands on RETURN so Enter leaves, but without scrolling: the card
+  // arrives beneath the board and the headline must stay where it landed.
+  const returnRef = React.useRef<HTMLButtonElement>(null);
+  React.useEffect(() => {
+    returnRef.current?.focus({ preventScroll: true });
+  }, []);
+
   const subject = React.useMemo(
     () => session.channels.find((c) => c.joint === report?.joint) ?? null,
     [session.channels, report?.joint],
@@ -202,16 +210,37 @@ export function VerdictCard({
             </MachineControl>
           ) : null}
         </div>
+        {/* The loudest thing in machine space, by construction.
+
+            Display, the top of the machine scale, and the only element on
+            this surface set at that size; the anomaly line under it at title,
+            one step below. Both lines used to sit a step lower (title and
+            heading), which on a board whose every other line is a 10px label
+            read as one more line of furniture: the operator found the verdict
+            by its colour, not its weight. The size is what makes the answer
+            to "what did the scan find" the first thing a glance lands on; the
+            colour is the second, and it is spent on the two lines that ARE
+            the finding — the part, then the kind of wrong, both at the alert
+            token's full luminance. Nothing else on the card is allowed
+            either: the differential, the summary, the evidence and the
+            controls all sit lower on the scale and dimmer on the ladder,
+            because they qualify the verdict rather than state it.
+
+            A clean scan spends neither the colour nor the second line — one
+            phosphor line, still at display size, because "nothing is wrong"
+            is a finding too and deserves to be read as one. */}
         <h2
           id="verdict-headline"
-          className={cn("text-title uppercase", clean ? "text-ink" : "text-alert")}
+          className={cn("text-display uppercase", clean ? "text-ink" : "text-alert")}
         >
           {clean
             ? "No anomaly detected"
             : `${machineJoint(report.joint)} · ${machineComponent(report.component)}`}
         </h2>
         {clean ? null : (
-          <p className="text-heading text-warn uppercase">{report.anomaly} anomaly</p>
+          <p data-slot="verdict-anomaly" className="text-title text-alert uppercase">
+            {report.anomaly} anomaly
+          </p>
         )}
         {/* The differential: what produces this signature, one dim
             line under the anomaly it qualifies. The scan measured a trace; it
@@ -313,7 +342,7 @@ export function VerdictCard({
         <ConsoleButton
           size="md"
           variant="primary"
-          autoFocus
+          ref={returnRef}
           className={sheet ? "w-full md:w-auto" : undefined}
           onClick={() => useIncidentStore.getState().completeAscent()}
         >
@@ -382,12 +411,7 @@ function VerdictDifferential({
               every other stated fact on this board is printed in. Amber would
               be a warning about nothing, and the board has no colour for good
               news because the console does not celebrate. */}
-          <p
-            className={cn(
-              "text-label uppercase",
-              cleared ? "text-ink" : "text-warn",
-            )}
-          >
+          <p className={cn("text-label uppercase", cleared ? "text-ink" : "text-warn")}>
             {calibrationAmendment(calibration.outcome, residual)}
           </p>
           <ResidualDifferential anomaly={anomaly} outcome={calibration.outcome} />

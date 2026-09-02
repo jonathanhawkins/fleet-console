@@ -36,7 +36,7 @@
 }
 
 /* ---------------------------------------------------------------------------
-   The fleet map. The marker DOM is built in components/console/fleet-map-
+   The fleet map. The marker DOM is built in components/fleet/fleet-map-
    marker.ts, which knows structure and state but no colour: every token here
    is applied by attribute selector on `data-status`, so a status flip is one
    attribute write. The basemap is WebGL; its colours are in

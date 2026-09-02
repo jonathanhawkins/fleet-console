@@ -1,6 +1,3 @@
-"use client";
-
-import { selectTrendingUnits, useFleetStore, type TrendingUnit } from "@/lib/stores";
 import { jointLabel } from "./joint-spec";
 
 /**
@@ -14,10 +11,12 @@ import { jointLabel } from "./joint-spec";
  * `--warn-ink` and a sentence-case measurement, one step down from the chip
  * that would be there if this were real.
  *
- * Everything below is pure string work over `TrendingUnit`, which is what makes
- * it testable without a store and reusable by the row, its accessible name, and
- * anything later that wants to say the same thing (the unit page's header, a
- * report line). The joint vocabulary is NOT re-invented here: `jointLabel` in
+ * Everything below is pure string work over a {@link UnitTrend}, which is what
+ * makes it testable without a store and reusable by the row, its accessible
+ * name, and anything later that wants to say the same thing (the unit page's
+ * header, a report line). The shape is declared here rather than imported from
+ * the store's `TrendingUnit` so this module — and the row that uses it — stays
+ * usable with a trend from anywhere; the store's entry satisfies it as is. The joint vocabulary is NOT re-invented here: `jointLabel` in
  * joint-spec.ts is the single wire→operator mapping, and a second one would be
  * a second chance for "knee_L" to reach a human.
  */
@@ -31,6 +30,14 @@ import { jointLabel } from "./joint-spec";
  * read as a new label rather than as the subject of the sentence — so the case
  * is adjusted at the point of use and the mapping stays single.
  */
+/** The two facts the watch reports: which joint, and how fast it is climbing. */
+export interface UnitTrend {
+  /** Wire name of the steepest climbing joint. */
+  joint: string;
+  /** That joint's fitted slope, whole °C/min. */
+  cPerMin: number;
+}
+
 function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
@@ -43,7 +50,7 @@ function lowerFirst(text: string): string {
  * temperature row could be read as a *value* by someone scanning fast. `+` is
  * one character that makes it a rate.
  */
-export function trendDetail(trend: TrendingUnit): string {
+export function trendDetail(trend: UnitTrend): string {
   return `${lowerFirst(jointLabel(trend.joint))} +${trend.cPerMin} °C/min`;
 }
 
@@ -55,20 +62,6 @@ export function trendDetail(trend: TrendingUnit): string {
  * Celsius per minute" to silence depending on the engine, and an ops console
  * does not get to gamble on which.
  */
-export function trendSpeech(trend: TrendingUnit): string {
+export function trendSpeech(trend: UnitTrend): string {
   return `Trending: ${lowerFirst(jointLabel(trend.joint))} climbing ${trend.cPerMin} degrees Celsius per minute.`;
-}
-
-/**
- * One unit's watch entry, or `undefined`.
- *
- * `selectTrendingUnits` keeps its array identity while trending truth is
- * unchanged (lib/stores/trendWatch.ts), so the element found inside it is
- * `Object.is`-stable too — which is what lets a virtualized row subscribe to
- * this bare and re-render only when its own forecast actually moves, not ten
- * times a second. For hosts that have a unit id and nothing else; the fleet
- * rail passes the entry down instead, for the reason stated there.
- */
-export function useTrendingUnit(unitId: string): TrendingUnit | undefined {
-  return useFleetStore((s) => selectTrendingUnits(s).find((t) => t.unitId === unitId));
 }

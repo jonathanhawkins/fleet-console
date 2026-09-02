@@ -288,6 +288,26 @@
   }
 }
 
+/* THE COMMAND GATE (execute-action.tsx) — where a confirmation stands.
+
+   In the flow by default: the phone's verdict sheet has nothing above the
+   gate to protect and its own scroller to bring the block into view. In the
+   board's centre column the gate is pinned to the foot of the column instead,
+   over the card and out of the flow, so opening and closing it moves nothing
+   — the column would otherwise grow under the manifest and scroll the chassis
+   elevation half off screen. The anchor is the positioned box the stage puts
+   outside the column's scroller (`[data-slot="verdict-column"]`); the insets
+   match the card's own padding so the box sits on the card's grid. z-index 1:
+   above the card and the leader-line SVG, below the scanline texture at 2. */
+@layer components {
+  [data-slot="verdict-column"] .execute-confirm {
+    position: absolute;
+    inset-inline: 0.75rem;
+    bottom: 0.75rem;
+    z-index: 1;
+  }
+}
+
 /* PARTS MANIFEST — the dot leader. A radial gradient, not a dotted border,
    so the dots stay on a 4px grid at any zoom. */
 @layer components {

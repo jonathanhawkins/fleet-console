@@ -1,7 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { JSAnimation, useMotionValue, type ValueAnimationTransition } from "framer-motion";
+import {
+  JSAnimation,
+  useMotionValue,
+  type ValueAnimationTransition,
+} from "framer-motion";
 import { descentTimeline, registerFrame } from "@/components/console";
 import { pushSample, trailVelocity, type PointerSample } from "@/lib/motion";
 import {
@@ -159,7 +163,7 @@ type Driver = NonNullable<ValueAnimationTransition["driver"]>;
  * frame apart in either direction, which puts a jump at t = 0 of the exact
  * kind an interruptible spring exists to remove; seeding the origin from the
  * first sampled frame makes the travel monotonic by construction. (Full
- * receipt: the note in components/console/incident-banner.tsx, where it was
+ * receipt: the note in components/fleet/incident-banner.tsx, where it was
  * measured.)
  */
 const frameLoopDriver: Driver = (update) => {
@@ -377,7 +381,8 @@ export function VerdictSheet({
           velocityRef.current = 0;
           flightRef.current = null;
           const slide = slideRef.current;
-          if (slide && slide.style.willChange === "transform") slide.style.willChange = "";
+          if (slide && slide.style.willChange === "transform")
+            slide.style.willChange = "";
           // Landed at rest is the only moment the board is genuinely covered.
           if (spec.to === 0) setCovered(true);
           onSettled?.();
@@ -386,7 +391,12 @@ export function VerdictSheet({
       // The analytic derivative of the spring at the frame it last wrote —
       // what a grab, a resume or a re-aim carries on from.
       velocity = () => animation.getGeneratorVelocity();
-      flightRef.current = { to: spec.to, response: spec.response, stop: animation.stop, onSettled };
+      flightRef.current = {
+        to: spec.to,
+        response: spec.response,
+        stop: animation.stop,
+        onSettled,
+      };
     },
     [offset, setCovered, stopFlight, write],
   );

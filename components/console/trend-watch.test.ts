@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { type TrendingUnit } from "@/lib/stores";
 import { JOINTS } from "./joint-spec";
-import { trendDetail, trendSpeech } from "./trend-watch";
+import { trendDetail, trendSpeech, type UnitTrend } from "./trend-watch";
 
 /**
  * The watch's operator-space voice. Two rules worth a test rather than a
@@ -9,8 +8,7 @@ import { trendDetail, trendSpeech } from "./trend-watch";
  * never leans on a symbol a screen reader may or may not read out.
  */
 
-const trend = (over: Partial<TrendingUnit> = {}): TrendingUnit => ({
-  unitId: "N-07",
+const trend = (over: Partial<UnitTrend> = {}): UnitTrend => ({
   joint: "knee_L",
   cPerMin: 18,
   ...over,

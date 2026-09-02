@@ -448,7 +448,7 @@ function MachineSpace() {
 export default function SystemPage() {
   // The disclaimer footer is rendered by the root layout, on every route.
   return (
-    <main>
+    <main id="main">
       <OperatorSpace />
       <MachineSpace />
     </main>

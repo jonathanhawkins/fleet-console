@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { ConsoleHeader, LiveConnectionStatus } from "@/components/console";
+import { ConsoleHeader } from "@/components/console";
+import { LiveConnectionStatus } from "@/components/fleet";
 import { FLEET_UNITS } from "@/sim/engine";
 import { UnitDetail } from "./unit-detail";
 
@@ -53,7 +54,10 @@ export default async function UnitPage({ params }: UnitPageProps) {
         <LiveConnectionStatus />
       </ConsoleHeader>
 
-      <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-6 px-5 py-6 sm:gap-8 sm:px-8 sm:py-8 md:gap-10 md:px-16 md:py-10 lg:px-24">
+      <main
+        id="main"
+        className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-6 px-5 py-6 sm:gap-8 sm:px-8 sm:py-8 md:gap-10 md:px-16 md:py-10 lg:px-24"
+      >
         <UnitDetail unitId={decodeURIComponent(id)} />
       </main>
     </>

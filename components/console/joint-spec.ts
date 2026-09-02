@@ -1,5 +1,4 @@
 import { scaleLinear, type ScaleLinear } from "d3-scale";
-import { type TelemetryMetric } from "@/lib/stores";
 
 /**
  * What the console knows about a leg before any telemetry arrives: the six
@@ -68,6 +67,14 @@ export function jointLabel(joint: string): string {
 
 /** Three measures per joint, in the order they read: heat, effort, draw. */
 export const METRICS = ["tempC", "torqueNm", "currentA"] as const;
+/**
+ * The measure vocabulary, owned here rather than imported from the stores: the
+ * spec sheet is what the console knows *before* any telemetry arrives, so it
+ * cannot depend on the layer that receives it. The telemetry channel's own
+ * `TelemetryMetric` is the same three strings, and the two unions are
+ * mutually assignable by structure.
+ */
+export type Metric = (typeof METRICS)[number];
 
 export interface MetricSpec {
   /** Sentence case in source; SectionLabel uppercases it. */
@@ -78,7 +85,7 @@ export interface MetricSpec {
   precision: number;
 }
 
-export const METRIC_SPEC: Record<TelemetryMetric, MetricSpec> = {
+export const METRIC_SPEC: Record<Metric, MetricSpec> = {
   tempC: { label: "Temp", unit: "°C", precision: 1 },
   torqueNm: { label: "Torque", unit: "N·m", precision: 1 },
   currentA: { label: "Current", unit: "A", precision: 2 },
@@ -114,7 +121,7 @@ export interface Envelope {
  * clipping the one trace that tells the story to keep a tidy line height would
  * be an ops console lying about a number. It gets the headroom instead.
  */
-const ENVELOPES: Record<JointClass, Record<TelemetryMetric, Envelope>> = {
+const ENVELOPES: Record<JointClass, Record<Metric, Envelope>> = {
   hip: {
     tempC: { floor: 26, healthy: 44, top: 60 },
     torqueNm: { floor: 0, healthy: 23, top: 31 },
@@ -132,7 +139,7 @@ const ENVELOPES: Record<JointClass, Record<TelemetryMetric, Envelope>> = {
   },
 };
 
-export function envelope(joint: string, metric: TelemetryMetric): Envelope {
+export function envelope(joint: string, metric: Metric): Envelope {
   return ENVELOPES[jointClass(joint)][metric];
 }
 

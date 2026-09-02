@@ -1,7 +1,6 @@
 import * as React from "react";
 import { DISCLAIMER } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { SimReset } from "./sim-reset";
 
 /**
  * The disclaimer, on every page, from the root layout (CLAUDE.md
@@ -14,7 +13,13 @@ import { SimReset } from "./sim-reset";
  */
 export type ConsoleFooterProps = React.ComponentPropsWithoutRef<"footer">;
 
-export function ConsoleFooter({ className, ...props }: ConsoleFooterProps) {
+/**
+ * `children` is the trailing slot beside the disclaimer. The root layout puts
+ * the demo's own controls there (the sim reset, from components/fleet) — the
+ * footer itself knows nothing about the simulator, which is what lets it
+ * render in any composition.
+ */
+export function ConsoleFooter({ className, children, ...props }: ConsoleFooterProps) {
   return (
     <footer
       data-slot="console-footer"
@@ -27,7 +32,7 @@ export function ConsoleFooter({ className, ...props }: ConsoleFooterProps) {
         <p className="text-small text-ink-soft">{DISCLAIMER}</p>
         {/* The demo's own controls belong next to the sentence admitting it is
             a demo, at the same volume as that sentence. */}
-        <SimReset />
+        {children}
       </div>
     </footer>
   );

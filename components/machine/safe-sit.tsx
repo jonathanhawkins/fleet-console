@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { commandSafeSit } from "@/components/console";
+import { commandSafeSit } from "@/components/fleet/telemetry-command";
 import { useFleetStore } from "@/lib/stores";
 import { ExecuteAction, type ManeuverSpec } from "./execute-action";
 import { SIT_GATE_NOTE, SIT_GATE_SUFFIX, SIT_IMPACT } from "./safe-sit-copy";

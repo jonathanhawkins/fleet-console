@@ -199,18 +199,14 @@ export function EvidenceTrace({
           <span
             className={cn(
               "tnum",
-              postTone
-                ? TONE_TEXT[postTone]
-                : subject
-                  ? "text-alert"
-                  : "text-ink-soft",
+              postTone ? TONE_TEXT[postTone] : subject ? "text-alert" : "text-ink-soft",
             )}
           >
             {(postGain ?? gain).toFixed(2)}× ref
           </span>
         </div>
         {postDelta === null || postGain === null ? null : (
-          <div className="flex items-baseline justify-between gap-3 text-label uppercase text-ink-muted">
+          <div className="flex items-baseline justify-between gap-3 text-label text-ink-muted uppercase">
             <span className="tnum">Was {delta.toFixed(3)}</span>
             <span className="tnum">Was {gain.toFixed(2)}×</span>
           </div>

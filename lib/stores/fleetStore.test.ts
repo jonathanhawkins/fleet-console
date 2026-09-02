@@ -8,20 +8,28 @@ import {
 } from "@/lib/schema";
 import { useAuditStore } from "./auditStore";
 import {
-  getUnitBuffers,
   selectAlertMeta,
   selectKpiAlerts,
   selectKpiAvgBattery,
   selectKpiNominal,
-  selectLastContact,
   selectUnit,
-  selectUnitBattery,
   selectUnitFirstRaisedAt,
-  selectUnitTelemetryVersion,
-  TELEMETRY_RING_CAPACITY,
   useFleetStore,
 } from "./fleetStore";
 import { RingBuffer } from "./ringBuffer";
+import {
+  getUnitBattery,
+  getUnitBuffers,
+  getUnitLastContact,
+  getUnitTelemetryVersion,
+  subscribeUnitTelemetry,
+  TELEMETRY_RING_CAPACITY,
+  telemetryBatchCount,
+} from "./telemetryChannel";
+
+/** The effective battery a `useUnitBattery(id)` host renders: live, else snapshot, else 0. */
+const batteryOf = (unitId: string): number =>
+  getUnitBattery(unitId) ?? useFleetStore.getState().units[unitId]?.battery ?? 0;
 
 const snapshot: FleetSnapshotMessage = {
   t: "fleet_snapshot",
@@ -117,142 +125,158 @@ describe("ring buffer", () => {
     expect(rings.ts.length).toBe(TELEMETRY_RING_CAPACITY);
     expect(rings.ts.at(0)).toBe(50 * 100); // oldest 50 batches aged out
     expect(rings.joints.get("knee_L")!.tempC.length).toBe(TELEMETRY_RING_CAPACITY);
-    expect(useFleetStore.getState().telemetryVersion).toBe(TELEMETRY_RING_CAPACITY + 50);
+    expect(telemetryBatchCount()).toBe(TELEMETRY_RING_CAPACITY + 50);
+    expect(getUnitTelemetryVersion("N-07")).toBe(TELEMETRY_RING_CAPACITY + 50);
   });
 });
 
 describe("fleet store — batching (PRD §7)", () => {
-  it("commits exactly once per telemetry batch (6 points -> 1 subscriber call)", () => {
+  it("a pure-telemetry batch is zero zustand commits and one per-unit notification", () => {
+    useFleetStore.getState().applySnapshot(snapshot);
     let commits = 0;
-    const unsub = useFleetStore.subscribe(() => {
+    let n07 = 0;
+    let n01 = 0;
+    const unsubStore = useFleetStore.subscribe(() => {
       commits += 1;
     });
-    useFleetStore.getState().applyTelemetry(telemetry("N-07", 100));
-    expect(commits).toBe(1);
+    const unsubN07 = subscribeUnitTelemetry("N-07", () => {
+      n07 += 1;
+    });
+    const unsubN01 = subscribeUnitTelemetry("N-01", () => {
+      n01 += 1;
+    });
+    // Six points, one batch: the rings take six pushes, the channel wakes
+    // N-07's subscribers once, and zustand hears nothing — the battery is
+    // the snapshot's figure and nothing is trending.
+    useFleetStore.getState().applyTelemetry(telemetry("N-07", 100, 70));
+    expect(commits).toBe(0);
+    expect(n07).toBe(1);
+    expect(n01).toBe(0);
 
     const rings = getUnitBuffers("N-07")!;
     expect(rings.joints.size).toBe(6);
     expect(rings.joints.get("knee_L")!.tempC.length).toBe(1);
     expect(rings.battery.length).toBe(1);
-    unsub();
+    unsubStore();
+    unsubN07();
+    unsubN01();
   });
 
-  it("a unit's batch does not disturb selectors for other units", () => {
+  it("a unit's batch does not disturb another unit's values or summary identity", () => {
     useFleetStore.getState().applySnapshot(snapshot);
     useFleetStore.getState().applyTelemetry(telemetry("N-01", 100, 90));
 
-    const s1 = useFleetStore.getState();
-    const n07Version = selectUnitTelemetryVersion("N-07")(s1);
-    const n07Unit = selectUnit("N-07")(s1);
-    const n07Battery = selectUnitBattery("N-07")(s1);
+    const n07Version = getUnitTelemetryVersion("N-07");
+    const n07Unit = selectUnit("N-07")(useFleetStore.getState());
+    const n07Battery = batteryOf("N-07");
 
     useFleetStore.getState().applyTelemetry(telemetry("N-01", 200, 89.9));
 
-    const s2 = useFleetStore.getState();
-    // Object.is-equal selector results == zustand skips the re-render
-    expect(selectUnitTelemetryVersion("N-07")(s2)).toBe(n07Version);
-    expect(selectUnit("N-07")(s2)).toBe(n07Unit);
-    expect(selectUnitBattery("N-07")(s2)).toBe(n07Battery);
+    // Object.is-equal reads == the per-unit hooks skip the re-render
+    expect(getUnitTelemetryVersion("N-07")).toBe(n07Version);
+    expect(selectUnit("N-07")(useFleetStore.getState())).toBe(n07Unit);
+    expect(batteryOf("N-07")).toBe(n07Battery);
     // while N-01 moved
-    expect(selectUnitTelemetryVersion("N-01")(s2)).toBe(2);
-    expect(selectUnitBattery("N-01")(s2)).toBe(89.9);
+    expect(getUnitTelemetryVersion("N-01")).toBe(2);
+    expect(batteryOf("N-01")).toBe(89.9);
   });
 
-  it("latestBattery mutates in place — identity stable whether or not the value moves", () => {
+  it("quantizes battery to 0.1 %: the value holds until the rounded figure moves", () => {
     useFleetStore.getState().applySnapshot(snapshot);
     useFleetStore.getState().applyTelemetry(telemetry("N-01", 100, 90.04));
-    const container = useFleetStore.getState().latestBattery;
+    expect(getUnitBattery("N-01")).toBe(90);
 
     useFleetStore.getState().applyTelemetry(telemetry("N-01", 200, 90.02)); // rounds to 90.0 again
-    expect(useFleetStore.getState().latestBattery).toBe(container);
-    expect(selectUnitBattery("N-01")(useFleetStore.getState())).toBe(90);
+    expect(getUnitBattery("N-01")).toBe(90);
 
-    useFleetStore.getState().applyTelemetry(telemetry("N-01", 300, 89.9)); // the VALUE moves…
-    expect(useFleetStore.getState().latestBattery).toBe(container); // …the record does not
-    expect(selectUnitBattery("N-01")(useFleetStore.getState())).toBe(89.9);
+    useFleetStore.getState().applyTelemetry(telemetry("N-01", 300, 89.9)); // the VALUE moves
+    expect(getUnitBattery("N-01")).toBe(89.9);
   });
 
-  it("bumps unit versions in place — stable container identity, values move (NPA-06)", () => {
+  it("a quiet batch bumps the unit's version and commits nothing", () => {
     useFleetStore.getState().applySnapshot(snapshot);
-    useFleetStore.getState().applyTelemetry(telemetry("N-07", 61_100, 80));
+    useFleetStore.getState().applyTelemetry(telemetry("N-07", 61_100, 70));
     const s1 = useFleetStore.getState();
-    const container = s1.unitTelemetryVersions;
 
     let commits = 0;
     const unsub = useFleetStore.subscribe(() => {
       commits += 1;
     });
     // A "quiet" batch: same rounded battery, same contact second — the version
-    // bumps are the only thing it changes.
-    useFleetStore.getState().applyTelemetry(telemetry("N-07", 61_200, 80));
+    // bump is the only thing it changes, and a version is not reactive state.
+    useFleetStore.getState().applyTelemetry(telemetry("N-07", 61_200, 70));
     unsub();
 
-    const s2 = useFleetStore.getState();
-    expect(commits).toBe(1); // still exactly one commit per batch
-    expect(s2).not.toBe(s1); // and that commit is a real top-level state change
-    expect(s2.telemetryVersion).toBe(2); // …because the notification counter moved
-    expect(s2.unitTelemetryVersions).toBe(container); // no per-batch record allocation
-    // Object.is on the selected VALUE is what wakes per-unit subscribers:
-    expect(selectUnitTelemetryVersion("N-07")(s2)).toBe(2);
-    expect(selectUnitTelemetryVersion("N-01")(s2)).toBe(0);
+    expect(commits).toBe(0);
+    expect(useFleetStore.getState()).toBe(s1); // not even a top-level identity change
+    expect(getUnitTelemetryVersion("N-07")).toBe(2);
+    expect(getUnitTelemetryVersion("N-01")).toBe(0);
   });
 
-  it("reset discards mutated records — a fresh run cannot inherit them", () => {
+  it("commits only when a reactive fact moves: the rounded fleet average", () => {
+    useFleetStore.getState().applySnapshot(snapshot); // avg (90 + 70) / 2 = 80
+    let commits = 0;
+    const unsub = useFleetStore.subscribe(() => {
+      commits += 1;
+    });
+    useFleetStore.getState().applyTelemetry(telemetry("N-01", 100, 89.9)); // 79.95 → still 80
+    expect(commits).toBe(0);
+    useFleetStore.getState().applyTelemetry(telemetry("N-01", 200, 50)); // 60
+    expect(commits).toBe(1);
+    unsub();
+    expect(selectKpiAvgBattery(useFleetStore.getState())).toBe(60);
+  });
+
+  it("reset empties the channel — a fresh run cannot inherit counters or primitives", () => {
     useFleetStore.getState().applyTelemetry(telemetry("N-07", 100));
-    expect(selectUnitTelemetryVersion("N-07")(useFleetStore.getState())).toBe(1);
+    expect(getUnitTelemetryVersion("N-07")).toBe(1);
 
     useFleetStore.getState().reset();
-    // Guards the in-place-mutation trap: were the initial state a shared
-    // object, the mutated records would leak back in here (e.g. {"N-07": 1}).
-    expect(useFleetStore.getState().unitTelemetryVersions).toEqual({});
-    expect(useFleetStore.getState().latestBattery).toEqual({});
-    expect(useFleetStore.getState().lastContactAt).toEqual({});
-    expect(useFleetStore.getState().telemetryVersion).toBe(0);
+    expect(getUnitTelemetryVersion("N-07")).toBe(0);
+    expect(getUnitBattery("N-07")).toBeUndefined();
+    expect(getUnitLastContact("N-07")).toBeUndefined();
+    expect(telemetryBatchCount()).toBe(0);
 
     useFleetStore.getState().applyTelemetry(telemetry("N-07", 200));
-    expect(selectUnitTelemetryVersion("N-07")(useFleetStore.getState())).toBe(1);
+    expect(getUnitTelemetryVersion("N-07")).toBe(1);
   });
 });
 
-describe("fleet store — lastContactAt (1 s quantization)", () => {
+describe("fleet store — last contact (1 s quantization)", () => {
   it("is undefined until the unit's first batch, then the batch second", () => {
     useFleetStore.getState().applySnapshot(snapshot);
-    expect(selectLastContact("N-07")(useFleetStore.getState())).toBeUndefined();
+    expect(getUnitLastContact("N-07")).toBeUndefined();
 
     useFleetStore.getState().applyTelemetry(telemetry("N-07", 61_234));
-    expect(selectLastContact("N-07")(useFleetStore.getState())).toBe(61_000);
-    expect(selectLastContact("N-01")(useFleetStore.getState())).toBeUndefined();
+    expect(getUnitLastContact("N-07")).toBe(61_000);
+    expect(getUnitLastContact("N-01")).toBeUndefined();
   });
 
-  it("keeps the record in place; the value moves only on the second boundary", () => {
+  it("moves only on the second boundary", () => {
     useFleetStore.getState().applyTelemetry(telemetry("N-07", 61_000));
-    const container = useFleetStore.getState().lastContactAt;
 
-    // nine more batches of the same second: the selected value holds still
+    // nine more batches of the same second: the value holds still
     for (let ts = 61_100; ts < 62_000; ts += 100) {
       useFleetStore.getState().applyTelemetry(telemetry("N-07", ts));
     }
-    expect(useFleetStore.getState().lastContactAt).toBe(container);
-    expect(selectLastContact("N-07")(useFleetStore.getState())).toBe(61_000);
+    expect(getUnitLastContact("N-07")).toBe(61_000);
 
-    // first batch of the next second: the quantized VALUE moves — in place,
-    // like unitTelemetryVersions, so the record identity still holds
+    // first batch of the next second: the quantized VALUE moves
     useFleetStore.getState().applyTelemetry(telemetry("N-07", 62_000));
-    expect(selectLastContact("N-07")(useFleetStore.getState())).toBe(62_000);
-    expect(useFleetStore.getState().lastContactAt).toBe(container);
+    expect(getUnitLastContact("N-07")).toBe(62_000);
   });
 
-  it("last-contact subscribers re-render at most once per second (every commit still notifies)", () => {
+  it("last-contact subscribers re-render at most once per second (every batch still notifies)", () => {
     useFleetStore.getState().applyTelemetry(telemetry("N-07", 61_000));
 
-    // What zustand's useStore does per commit: re-run the selector, bail on
-    // Object.is. Count both the notifications and the survivors.
+    // What `useUnitLastContact` does per notification: re-read the value,
+    // bail on Object.is. Count both the notifications and the survivors.
     let notifications = 0;
     let renders = 0;
-    let lastSeen = selectLastContact("N-07")(useFleetStore.getState());
-    const unsub = useFleetStore.subscribe((s) => {
+    let lastSeen = getUnitLastContact("N-07");
+    const unsub = subscribeUnitTelemetry("N-07", () => {
       notifications += 1;
-      const v = selectLastContact("N-07")(s);
+      const v = getUnitLastContact("N-07");
       if (!Object.is(v, lastSeen)) {
         lastSeen = v;
         renders += 1;
@@ -264,15 +288,24 @@ describe("fleet store — lastContactAt (1 s quantization)", () => {
     }
     unsub();
 
-    expect(notifications).toBe(19); // one honest commit per batch
+    expect(notifications).toBe(19); // one honest notification per batch
     expect(renders).toBe(1); // exactly one value move: 61_000 → 62_000
     expect(lastSeen).toBe(62_000);
   });
 
-  it("a fresh snapshot clears lastContactAt (telemetry repopulates it)", () => {
-    useFleetStore.getState().applyTelemetry(telemetry("N-07", 61_000));
+  it("a fresh snapshot clears last contact and battery (telemetry repopulates them)", () => {
+    useFleetStore.getState().applyTelemetry(telemetry("N-07", 61_000, 55));
+    let woke = 0;
+    const unsub = subscribeUnitTelemetry("N-07", () => {
+      woke += 1;
+    });
     useFleetStore.getState().applySnapshot(snapshot); // RESET_SIM broadcast
-    expect(selectLastContact("N-07")(useFleetStore.getState())).toBeUndefined();
+    unsub();
+    expect(woke).toBe(1); // the restatement wakes the unit's hooks once
+    expect(getUnitLastContact("N-07")).toBeUndefined();
+    expect(getUnitBattery("N-07")).toBeUndefined();
+    expect(batteryOf("N-07")).toBe(70); // back to the snapshot's figure
+    expect(getUnitTelemetryVersion("N-07")).toBe(1); // the canvases keep their counter
   });
 });
 
@@ -295,16 +328,16 @@ describe("fleet store — kpiAvgBattery in O(1) on telemetry", () => {
     useFleetStore.getState().applyTelemetry(telemetry("N-01", 100, 89.9));
     const s = useFleetStore.getState();
     // (89.9 + 70) / 2 = 79.95 → still rounds to 80: the KPI value holds, so
-    // KPI subscribers bail on Object.is — while the unit's own battery moved.
+    // nothing commits — while the unit's own battery moved in the channel.
     expect(selectKpiAvgBattery(s)).toBe(before);
-    expect(selectUnitBattery("N-01")(s)).toBe(89.9);
+    expect(batteryOf("N-01")).toBe(89.9);
   });
 
   it("records batteries for units outside the snapshot without counting them", () => {
     useFleetStore.getState().applySnapshot(snapshot);
     useFleetStore.getState().applyTelemetry(telemetry("N-99", 100, 10));
     const s = useFleetStore.getState();
-    expect(selectUnitBattery("N-99")(s)).toBe(10);
+    expect(batteryOf("N-99")).toBe(10);
     expect(selectKpiAvgBattery(s)).toBe(80); // the fleet average counts snapshot units only
   });
 
@@ -437,7 +470,7 @@ describe("fleet store — snapshot, alerts, kpis", () => {
     useFleetStore.getState().reset();
     expect(useFleetStore.getState().telemetryEpochTs).toEqual({});
     expect(useFleetStore.getState().unitIds).toEqual([]);
-    expect(useFleetStore.getState().telemetryVersion).toBe(0);
+    expect(telemetryBatchCount()).toBe(0);
     expect(getUnitBuffers("N-07")).toBeUndefined();
   });
 });

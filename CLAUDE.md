@@ -33,13 +33,17 @@ Next 15 (App Router, static-export capable) · React 19 · TS 5 strict · Tailwi
 
 ```
 /app                  routes: / (fleet), /unit/[id], /system (design-system gallery)
-/components/console   the component library (deliverable): StatusChip, UnitCard, AlertRail,
-                      TelemetryStrip, DescentOverlay, ScanLog, WaveformStrip, VerdictCard…
+/components/console   the component library (deliverable): pure primitives + hooks, no store
+                      imports — StatusChip, ConsoleButton, ConsoleCard, UnitCard, BatteryMeter…
+/components/fleet     this app's store-wired regions, built from console: FleetMap, FleetRail,
+                      AlertRail, IncidentBanner, TelemetryStrip, DescentOverlay, ComponentView…
 /components/machine   machine-space internals (canvas-heavy, mono)
 /lib/transport        TelemetryTransport interface + WsTransport + WorkerTransport
 /lib/stores           zustand stores, batched reducers
 /lib/schema           zod message schemas (shared with sim)
 /sim                  simulator engine (ws server in dev, Web Worker in prod)
+/sim/engine           the engine as a module folder — one file per storyline and
+                      per command; sim/engine.ts re-exports it (the stable import)
 ```
 
 ## Working in the tree

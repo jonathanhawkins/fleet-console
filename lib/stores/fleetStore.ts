@@ -9,96 +9,32 @@ import {
 } from "@/lib/schema";
 import { type ConnectionStatus } from "@/lib/transport/types";
 import { useAuditStore, type AuditEntry } from "./auditStore";
-import { RingBuffer } from "./ringBuffer";
+import {
+  getUnitBattery,
+  recordTelemetryBatch,
+  resetTelemetryChannel,
+  restateTelemetry,
+  useUnitTelemetryValue,
+} from "./telemetryChannel";
+import {
+  resetTrendWatch,
+  trendOnBatch,
+  trendOnUnitsChange,
+  type TrendingUnit,
+} from "./trendWatch";
 
 /**
- * Fleet store: units, alerts, connection, and telemetry *versions*.
+ * Fleet store: units, alerts, connection, KPIs, and the trend watch's verdict.
  *
- * The samples themselves live in module-level ring buffers (see README —
- * "mutable arrays + version counter"): `applyTelemetry` writes the batch into
- * the rings, then makes exactly ONE `set()` commit that bumps the unit's
- * version counter (PRD §7: one commit per 10 Hz batch, one render per
- * commit). Canvas code reads the rings directly inside its rAF loop; React
- * components subscribe only to the narrow slices they display.
+ * Telemetry itself never enters this store. Samples, per-unit version
+ * counters and the quantized battery / last-contact primitives live in the
+ * telemetry channel (telemetryChannel.ts), which notifies one unit's
+ * subscribers per batch. `applyTelemetry` records the batch there and then
+ * commits here ONLY if a reactive fact moved: the rounded fleet-average
+ * battery, or the trending set. A quiet batch is zero zustand commits, one
+ * per-unit notification — at 500 units that is the difference between one
+ * canvas redraw and five thousand selector passes a second.
  */
-
-// ---------------------------------------------------------------------------
-// telemetry ring buffers (non-reactive, module-level)
-
-/** ~60 s of history per series at 10 Hz. */
-export const TELEMETRY_RING_CAPACITY = 600;
-
-export type TelemetryMetric = "tempC" | "torqueNm" | "currentA";
-export type JointSeries = Record<TelemetryMetric, RingBuffer>;
-
-export interface UnitBuffers {
-  /** Batch timestamps (epoch ms); shared x-axis for every series of the unit. */
-  ts: RingBuffer;
-  /** Battery %, one sample per batch. */
-  battery: RingBuffer;
-  /** Per-joint tempC / torqueNm / currentA, one sample each per batch. */
-  joints: Map<string, JointSeries>;
-}
-
-const buffers = new Map<string, UnitBuffers>();
-
-function ensureUnitBuffers(unitId: string): UnitBuffers {
-  let unit = buffers.get(unitId);
-  if (!unit) {
-    unit = {
-      ts: new RingBuffer(TELEMETRY_RING_CAPACITY),
-      battery: new RingBuffer(TELEMETRY_RING_CAPACITY),
-      joints: new Map(),
-    };
-    buffers.set(unitId, unit);
-  }
-  return unit;
-}
-
-function ensureJointSeries(unit: UnitBuffers, joint: string): JointSeries {
-  let series = unit.joints.get(joint);
-  if (!series) {
-    series = {
-      tempC: new RingBuffer(TELEMETRY_RING_CAPACITY),
-      torqueNm: new RingBuffer(TELEMETRY_RING_CAPACITY),
-      currentA: new RingBuffer(TELEMETRY_RING_CAPACITY),
-    };
-    unit.joints.set(joint, series);
-  }
-  return series;
-}
-
-/**
- * Read access for the canvas layer. Rings mutate in place — read them inside
- * the rAF loop (or after a version bump), never store snapshots of them.
- */
-export function getUnitBuffers(unitId: string): UnitBuffers | undefined {
-  return buffers.get(unitId);
-}
-
-/**
- * Where each unit's retained history ends at the moment the world restates —
- * the seam between two runs (`FleetState.telemetryEpochTs`).
- *
- * The rings deliberately survive a snapshot (`applySnapshot`), so after a
- * RESET_SIM they still hold the run that just ended. That is right for the
- * charts, which are drawing a continuous 60 s of a robot's life, and wrong for
- * anything that fits a RATE across time: the storyline replays from the top,
- * so a window spanning the seam is a fit over two different runs glued
- * together. Marking the seam costs one pass over the rings per snapshot —
- * they are rare — and lets those derivations refuse to read past it.
- */
-function markTelemetryEpoch(): Record<string, number> {
-  const epochs: Record<string, number> = {};
-  for (const [unitId, unit] of buffers) {
-    const newest = unit.ts.last();
-    if (newest !== undefined) epochs[unitId] = newest;
-  }
-  return epochs;
-}
-
-// ---------------------------------------------------------------------------
-// reactive state
 
 const MAX_ALERTS = 100;
 
@@ -141,62 +77,23 @@ export interface FleetState {
   /** Ack/resolution lifecycle per alert id; see AlertMeta. Session-scoped. */
   alertMeta: Record<string, AlertMeta>;
   /**
-   * Latest battery % per unit (0.1 resolution), from telemetry. Mutated IN
-   * PLACE by `applyTelemetry`, like `unitTelemetryVersions`: consumers read
-   * per-unit VALUES (`selectUnitBattery`), never the record.
-   */
-  latestBattery: Record<string, number>;
-  /**
-   * Epoch ms of the unit's newest telemetry batch, quantized to 1 s (same
-   * trick as latestBattery): the stored value only moves when the batch
-   * crosses a second boundary, so "last contact" subscribers re-render at
-   * most once per second per unit, not per batch. Mutated IN PLACE by
-   * `applyTelemetry`, like `unitTelemetryVersions` — `selectLastContact`
-   * reads a per-unit value, never the record.
-   */
-  lastContactAt: Record<string, number>;
-  /**
-   * Bumped once per telemetry batch for the unit that received it — IN PLACE.
-   * Same philosophy as the ring buffers: the record's identity is stable and
-   * not part of the contract; consumers read per-unit VALUES (primitives), via
-   * `selectUnitTelemetryVersion` or a `getState()` poll, never the record.
-   */
-  unitTelemetryVersions: Record<string, number>;
-  /**
    * Per-unit ts of the newest sample the rings held when the world last
-   * restated (`markTelemetryEpoch`): the seam between runs. Absent for a unit
-   * that had reported nothing yet.
-   *
-   * Unlike its neighbours this record is REPLACED, not mutated — a snapshot is
-   * rare and its new identity is the signal derivations key their own reset
-   * on (lib/stores/trendWatch.ts). Samples at or before a unit's epoch belong
-   * to a previous run: RESET_SIM replays the storyline from the top while the
-   * rings keep their history, so a rate fitted across this seam is a fit over
-   * two runs glued together, and a latch held across it lets the second run
-   * be judged on the first one's evidence.
+   * restated: the seam between runs. Absent for a unit that had reported
+   * nothing yet. Replaced (never mutated) on snapshot — a snapshot is rare —
+   * so a derivation that fits a rate across time can refuse to read past the
+   * run that just ended (trendWatch.ts).
    */
   telemetryEpochTs: Record<string, number>;
   /**
-   * Bumped once per telemetry batch, any unit — the store's notification
-   * counter. On a quiet batch (battery and contact-second unmoved) it is the
-   * only field in the commit, and the reason that commit is still an honest
-   * state change that wakes every subscriber.
+   * The thermal trend watch's verdict, in rail order (trendWatch.ts). A
+   * reactive fact: identity moves only when membership, the suspect joint or
+   * a whole-number °C/min moves — a handful of times an hour, never per batch.
    */
-  telemetryVersion: number;
+  trending: TrendingUnit[];
   // KPIs (header): kept as primitives so subscribers stay narrow.
   kpiNominal: number;
   kpiAlerts: number;
   kpiAvgBattery: number;
-  /**
-   * Bookkeeping behind kpiAvgBattery — running Σ and count of every counted
-   * unit's effective battery (`latestBattery[id] ?? units[id].battery` over
-   * `unitIds`), so a telemetry battery move re-derives the KPI in O(1)
-   * instead of walking the fleet. Full recomputes (snapshot, alert) re-seed
-   * both through `computeKpis`, which also bounds FP drift from the
-   * incremental adds. Internal: no selector reads them.
-   */
-  kpiBatterySum: number;
-  kpiBatteryCount: number;
 
   applySnapshot(msg: FleetSnapshotMessage): void;
   applyTelemetry(msg: TelemetryMessage): void;
@@ -222,11 +119,21 @@ export interface FleetState {
    * the lifecycle is metadata — the UI renders the resolved state from meta.
    */
   resolveAlert(alertId: string, resolution: AlertResolution): void;
-  /** Full reset: state AND ring buffers. Tests + app teardown. */
+  /** Full reset: state, ring buffers, trend watch. Tests + app teardown. */
   reset(): void;
 }
 
-const round1 = (v: number) => Math.round(v * 10) / 10;
+/**
+ * Bookkeeping behind kpiAvgBattery — running Σ and count of every counted
+ * unit's effective battery (`getUnitBattery(id) ?? units[id].battery` over
+ * `unitIds`), so a telemetry battery move re-derives the KPI in O(1) instead
+ * of walking the fleet. Module state rather than store state: writing it
+ * through `set()` would be a commit per 0.1 % move. Full recomputes
+ * (snapshot, alert, unit_update) re-seed both through `computeKpis`, which
+ * also bounds FP drift from the incremental adds.
+ */
+let kpiBatterySum = 0;
+let kpiBatteryCount = 0;
 
 /**
  * Units with at least one UNRESOLVED alert. Resolution lives in
@@ -252,14 +159,7 @@ function computeKpis(
   unitIds: string[],
   alerts: Alert[],
   alertMeta: Record<string, AlertMeta>,
-  latestBattery: Record<string, number>,
-): {
-  kpiNominal: number;
-  kpiAlerts: number;
-  kpiAvgBattery: number;
-  kpiBatterySum: number;
-  kpiBatteryCount: number;
-} {
+): { kpiNominal: number; kpiAlerts: number; kpiAvgBattery: number } {
   let nominal = 0;
   let batterySum = 0;
   let batteryCount = 0;
@@ -267,10 +167,11 @@ function computeKpis(
     const unit = units[id];
     if (!unit) continue;
     if (unit.status === "nominal") nominal += 1;
-    const battery = latestBattery[id] ?? unit.battery;
-    batterySum += battery;
+    batterySum += getUnitBattery(id) ?? unit.battery;
     batteryCount += 1;
   }
+  kpiBatterySum = batterySum;
+  kpiBatteryCount = batteryCount;
   // kpiAlerts counts UNITS with an active — unresolved — alert, not alert
   // events: an amber followed by a red on the same unit is one troubled unit,
   // and the header KPI sits next to "Units nominal", so it must count in the
@@ -279,8 +180,6 @@ function computeKpis(
     kpiNominal: nominal,
     kpiAlerts: countAlertingUnits(alerts, alertMeta),
     kpiAvgBattery: batteryCount === 0 ? 0 : Math.round(batterySum / batteryCount),
-    kpiBatterySum: batterySum,
-    kpiBatteryCount: batteryCount,
   };
 }
 
@@ -290,9 +189,8 @@ function computeKpis(
  * load-bearing part: it demands a comparison entry for EVERY UnitSummary
  * field, so a schema addition that forgets this list fails to typecheck
  * instead of silently treating that field's restatements as "unchanged"
- * ( amendment: `fw`/`fwPending` were exactly that — a firmware-only
- * unit_update landed only when battery happened to drift in the same
- * restatement).
+ * (`fw`/`fwPending` were exactly that once — a firmware-only unit_update
+ * landed only when battery happened to drift in the same restatement).
  */
 function sameSummary(a: UnitSummary, b: UnitSummary): boolean {
   const compared = {
@@ -310,34 +208,30 @@ function sameSummary(a: UnitSummary, b: UnitSummary): boolean {
   return Object.values(compared).every(Boolean);
 }
 
-/**
- * A factory, not a const: `unitTelemetryVersions`, `latestBattery` and
- * `lastContactAt` are mutated in place by `applyTelemetry`, so a shared
- * initial object would get polluted and `reset()` would resurrect stale
- * entries into the "fresh" state.
- */
+const EMPTY_TRENDING: TrendingUnit[] = [];
+
 const createInitialState = () => ({
   connection: "idle" as ConnectionStatus,
   units: {},
   unitIds: [],
   alerts: [],
   alertMeta: {} as Record<string, AlertMeta>,
-  latestBattery: {} as Record<string, number>,
-  lastContactAt: {} as Record<string, number>,
-  unitTelemetryVersions: {} as Record<string, number>,
   telemetryEpochTs: {} as Record<string, number>,
-  telemetryVersion: 0,
+  trending: EMPTY_TRENDING,
   kpiNominal: 0,
   kpiAlerts: 0,
   kpiAvgBattery: 0,
-  kpiBatterySum: 0,
-  kpiBatteryCount: 0,
 });
 
-export const useFleetStore = create<FleetState>()((set) => ({
+export const useFleetStore = create<FleetState>()((set, get) => ({
   ...createInitialState(),
 
-  applySnapshot: (msg) =>
+  applySnapshot: (msg) => {
+    // A snapshot restates the world (fresh connect or RESET_SIM). The channel
+    // keeps its rings and marks the seam; the trend watch drops every latch
+    // and fit — evidence about the run that just ended.
+    const telemetryEpochTs = restateTelemetry();
+    resetTrendWatch();
     set((s) => {
       const units: Record<string, UnitSummary> = {};
       const unitIds: string[] = [];
@@ -345,12 +239,8 @@ export const useFleetStore = create<FleetState>()((set) => ({
         units[u.id] = u;
         unitIds.push(u.id);
       }
-      // A snapshot restates the world (fresh connect or RESET_SIM): the alert
-      // feed clears and the server replays still-active alerts right after.
-      // Ring buffers are left alone — history simply ages out of the window —
-      // so the seam is MARKED instead (`telemetryEpochTs`): the charts keep
-      // drawing across it, and a derivation that fits a rate over time can
-      // refuse to. `alertMeta` does NOT clear — it is keyed by alert id
+      // The alert feed clears and the server replays still-active alerts
+      // right after. `alertMeta` does NOT clear — it is keyed by alert id
       // (unique across runs) and an ack must survive a reconnect's snapshot +
       // replay.
       const alerts: Alert[] = [];
@@ -358,80 +248,39 @@ export const useFleetStore = create<FleetState>()((set) => ({
         units,
         unitIds,
         alerts,
-        latestBattery: {},
-        lastContactAt: {},
-        telemetryEpochTs: markTelemetryEpoch(),
-        ...computeKpis(units, unitIds, alerts, s.alertMeta, {}),
+        telemetryEpochTs,
+        trending: s.trending.length === 0 ? s.trending : EMPTY_TRENDING,
+        ...computeKpis(units, unitIds, alerts, s.alertMeta),
       };
-    }),
+    });
+  },
 
   applyTelemetry: (msg) => {
-    // Ordering is enforced upstream: the transport's `createOrderingGate` has
-    // already dropped any batch with ts <= the unit's newest (README,
-    // "Out-of-order and replay policy") — this reducer trusts its input.
+    // The batch lands in the channel — rings, version, primitives — and that
+    // unit's subscribers hear about it. What follows decides whether any
+    // REACTIVE fact moved; on a quiet batch nothing below commits.
+    const move = recordTelemetryBatch(msg);
+    const s = get();
+    const next: Partial<FleetState> = {};
 
-    // 1) mutate the rings (outside reactive state)
-    const unit = ensureUnitBuffers(msg.unitId);
-    unit.ts.push(msg.ts);
-    const battery = msg.batch[0]?.battery;
-    if (battery !== undefined) unit.battery.push(battery);
-    for (const p of msg.batch) {
-      const series = ensureJointSeries(unit, p.joint);
-      series.tempC.push(p.tempC);
-      series.torqueNm.push(p.torqueNm);
-      series.currentA.push(p.currentA);
+    if (move !== null) {
+      // kpiAvgBattery in O(1): shift the running sum by this unit's move and
+      // re-round. A unit's first batch replaces its snapshot battery in the
+      // sum — the same fallback computeKpis uses — and units outside the
+      // snapshot are recorded (the channel still answers for them) but never
+      // counted, also matching computeKpis.
+      const summary = s.units[msg.unitId];
+      if (summary) {
+        kpiBatterySum += move.next - (move.prev ?? summary.battery);
+        const avg = kpiBatteryCount === 0 ? 0 : Math.round(kpiBatterySum / kpiBatteryCount);
+        if (avg !== s.kpiAvgBattery) next.kpiAvgBattery = avg;
+      }
     }
 
-    // 2) exactly one commit
-    set((s) => {
-      // In place, like the rings: `unitTelemetryVersions`, `latestBattery`
-      // and `lastContactAt` all mutate under stable record identities that no
-      // consumer observes — selectors read per-unit VALUES (primitives), so
-      // zustand's Object.is bail-out wakes exactly the subscribers whose
-      // value moved, and nobody else. Spreading these records here was an
-      // O(fleet) allocation per commit; at 500 units the wave where every
-      // unit crosses a 1 s contact boundary together spent ~14 ms re-copying
-      // 500-key records (docs/perf.md "Commit cost per batch
-      // wave"). This reducer does no O(fleet) work on any path.
-      s.unitTelemetryVersions[msg.unitId] =
-        (s.unitTelemetryVersions[msg.unitId] ?? 0) + 1;
-      // `telemetryVersion` is the commit's load-bearing field: it changes on
-      // every batch, so even a quiet one produces a real top-level state
-      // change and a notification — and with the records above mutating in
-      // place, it is what makes their writes observable at all. Don't remove
-      // it (audit NPA-06).
-      const next: Partial<FleetState> = {
-        telemetryVersion: s.telemetryVersion + 1,
-      };
-      if (battery !== undefined) {
-        const rounded = round1(battery);
-        const prev = s.latestBattery[msg.unitId];
-        if (prev !== rounded) {
-          s.latestBattery[msg.unitId] = rounded;
-          // kpiAvgBattery in O(1): shift the running sum by this unit's move
-          // and re-round. A unit's first batch replaces its snapshot battery
-          // in the sum — the same `latestBattery[id] ?? unit.battery`
-          // fallback computeKpis uses — and units outside the snapshot are
-          // recorded (selectUnitBattery still works) but never counted, also
-          // matching computeKpis. The KPI field itself commits only when the
-          // rounded fleet average actually moves.
-          const summary = s.units[msg.unitId];
-          if (summary) {
-            const sum = s.kpiBatterySum - (prev ?? summary.battery) + rounded;
-            next.kpiBatterySum = sum;
-            const avg = s.kpiBatteryCount === 0 ? 0 : Math.round(sum / s.kpiBatteryCount);
-            if (avg !== s.kpiAvgBattery) next.kpiAvgBattery = avg;
-          }
-        }
-      }
-      // 1 s quantization: the stored value only moves when the second
-      // boundary does.
-      const contactAt = Math.floor(msg.ts / 1000) * 1000;
-      if (s.lastContactAt[msg.unitId] !== contactAt) {
-        s.lastContactAt[msg.unitId] = contactAt;
-      }
-      return next;
-    });
+    const trending = trendOnBatch(s, msg.unitId);
+    if (trending !== s.trending) next.trending = trending;
+
+    if (next.kpiAvgBattery !== undefined || next.trending !== undefined) set(next);
   },
 
   applyAlert: (msg) => {
@@ -466,17 +315,21 @@ export const useFleetStore = create<FleetState>()((set) => ({
 
       const alerts = [msg.alert, ...s.alerts].slice(0, MAX_ALERTS);
       let units = s.units;
+      let trending = s.trending;
       const unit = s.units[msg.alert.unitId];
       if (unit && unit.status !== msg.alert.severity) {
         units = {
           ...s.units,
           [msg.alert.unitId]: { ...unit, status: msg.alert.severity },
         };
+        // The alert owns the story now: the watch stands down for this unit.
+        trending = trendOnUnitsChange(units, s.unitIds, trending);
       }
       return {
         alerts,
         units,
-        ...computeKpis(units, s.unitIds, alerts, s.alertMeta, s.latestBattery),
+        trending,
+        ...computeKpis(units, s.unitIds, alerts, s.alertMeta),
       };
     });
 
@@ -498,7 +351,8 @@ export const useFleetStore = create<FleetState>()((set) => ({
       const units = { ...s.units, [u.id]: u };
       return {
         units,
-        ...computeKpis(units, s.unitIds, s.alerts, s.alertMeta, s.latestBattery),
+        trending: trendOnUnitsChange(units, s.unitIds, s.trending),
+        ...computeKpis(units, s.unitIds, s.alerts, s.alertMeta),
       };
     }),
 
@@ -577,7 +431,10 @@ export const useFleetStore = create<FleetState>()((set) => ({
   },
 
   reset: () => {
-    buffers.clear();
+    resetTelemetryChannel();
+    resetTrendWatch();
+    kpiBatterySum = 0;
+    kpiBatteryCount = 0;
     set(createInitialState());
   },
 }));
@@ -597,29 +454,6 @@ export const selectUnit =
   (unitId: string) =>
   (s: FleetState): UnitSummary | undefined =>
     s.units[unitId];
-
-/** Live battery for one unit (0.1 % resolution); falls back to the snapshot value. */
-export const selectUnitBattery =
-  (unitId: string) =>
-  (s: FleetState): number =>
-    s.latestBattery[unitId] ?? s.units[unitId]?.battery ?? 0;
-
-/** Bumps once per batch for this unit — chart hosts re-draw on this, nothing else. */
-export const selectUnitTelemetryVersion =
-  (unitId: string) =>
-  (s: FleetState): number =>
-    s.unitTelemetryVersions[unitId] ?? 0;
-
-/**
- * Epoch ms of the unit's newest telemetry batch, quantized to 1 s —
- * `undefined` until the unit's first batch of the run. Safe to bind
- * "last contact Xs ago" text to (re-renders once per second, not per batch);
- * pair with the app's shared 1 s ticker for the "ago" half.
- */
-export const selectLastContact =
-  (unitId: string) =>
-  (s: FleetState): number | undefined =>
-    s.lastContactAt[unitId];
 
 /** Lifecycle meta for one alert (undefined = un-acked, un-resolved). */
 export const selectAlertMeta =
@@ -644,3 +478,23 @@ export const selectUnitFirstRaisedAt =
     }
     return first;
   };
+
+// ---------------------------------------------------------------------------
+// per-unit telemetry hooks — the channel's values as React state
+
+const selectSnapshotBattery =
+  (unitId: string) =>
+  (s: FleetState): number | undefined =>
+    s.units[unitId]?.battery;
+
+/**
+ * Live battery for one unit at 0.1 % resolution, falling back to the
+ * snapshot's figure until the unit's first batch of the run (0 for a unit
+ * the console has never heard of). Re-renders when the rounded value moves
+ * — not per batch — and only for this unit.
+ */
+export function useUnitBattery(unitId: string): number {
+  const live = useUnitTelemetryValue(unitId, getUnitBattery, undefined);
+  const snapshot = useFleetStore(selectSnapshotBattery(unitId));
+  return live ?? snapshot ?? 0;
+}

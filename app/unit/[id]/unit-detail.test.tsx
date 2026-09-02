@@ -44,7 +44,7 @@ beforeEach(() => {
   // jsdom has no canvas backend. Returning null rather than letting it warn
   // eighteen times per test also exercises the strip's own guard: no context,
   // no drawing, no crash. The drawing itself is covered against a recording
-  // context in components/console/telemetry-strip.test.tsx.
+  // context in components/fleet/telemetry-strip.test.tsx.
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
 });
 

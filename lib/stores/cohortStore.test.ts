@@ -11,6 +11,7 @@ import {
 } from "./cohortStore";
 import { useCommandStore } from "./commandStore";
 import { useFleetStore } from "./fleetStore";
+import { telemetryBatchCount } from "./telemetryChannel";
 
 /**
  * cohort detection as a pure derivation over fleet-store state.
@@ -221,7 +222,7 @@ describe("cohort detection — memo identity discipline", () => {
         batch: [{ joint: "knee_L", tempC: 33, torqueNm: 12, currentA: 1.5, battery: 79 }],
       });
     }
-    expect(useFleetStore.getState().telemetryVersion).toBe(10);
+    expect(telemetryBatchCount()).toBe(10);
     expect(cohorts()).toBe(before); // identity, not just equality
   });
 

@@ -29,6 +29,42 @@ const shadcnBoundary = {
   ],
 };
 
+/**
+ * The direction of dependency between the two component layers.
+ *
+ * `components/console` is the library: props in, markup out, usable in any
+ * composition. `components/fleet` is this app's store-wired regions, built out
+ * of it. The library may therefore never reach into the stores or into the
+ * regions — a console primitive that subscribed to `lib/stores` would stop
+ * being a primitive, and the split would be a folder rename.
+ */
+const consoleBoundary = {
+  "no-restricted-imports": [
+    "error",
+    {
+      patterns: [
+        {
+          group: ["@/lib/stores", "@/lib/stores/*", "**/lib/stores", "**/lib/stores/*"],
+          message:
+            "components/console is store-free. A component that needs the stores is a fleet region: put it in components/fleet.",
+        },
+        {
+          group: [
+            "@/components/fleet",
+            "@/components/fleet/*",
+            "**/components/fleet/*",
+            "../fleet",
+            "../fleet/*",
+            "../../fleet/*",
+          ],
+          message:
+            "components/console must not depend on components/fleet; the dependency runs the other way.",
+        },
+      ],
+    },
+  ],
+};
+
 const eslintConfig = [
   {
     ignores: [
@@ -65,8 +101,12 @@ const eslintConfig = [
     rules: shadcnBoundary,
   },
   {
-    files: ["components/machine/**/*.{ts,tsx}"],
+    files: ["components/machine/**/*.{ts,tsx}", "components/fleet/**/*.{ts,tsx}"],
     rules: shadcnBoundary,
+  },
+  {
+    files: ["components/console/**/*.{ts,tsx}"],
+    rules: consoleBoundary,
   },
   {
     // shadcn's generated primitives are vendored code: held to the type bar,

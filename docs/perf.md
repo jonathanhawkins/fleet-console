@@ -145,7 +145,31 @@ then one scripted golden-path run.
 | Run-diagnostic press → visible feedback | **1.3 ms** (banner flips to "Diagnostic in progress", page starts draining) |
 | Run-diagnostic press → descent surface in DOM | 333.6 ms — deliberate: the overlay mounts on the sim's `scan_start` event and enters behind a 200 ms dim + 350 ms wipe choreography; the window is network-free (the chunk was warmed at banner mount) |
 
-## Lighthouse (desktop preset, local static serve, `/`)
+## Lighthouse (gated; the receipt is the JSON)
+
+The Lighthouse claim is no longer a table typed into this file. It is
+`scripts/lighthouse.mjs`: desktop preset, the static export served by
+`scripts/serve-static.mjs --gzip` (what the deploy target sends), against `/`
+and `/unit/N-01`, on Playwright's Chromium with SwiftShader GL so a laptop and
+a CI runner measure the same thing. It exits 1 under **performance 90** or
+under **100** on accessibility, best practices or SEO, and CI runs it in the
+e2e job right after the bundle budgets, posting the scores to the job summary.
+
+The reports it wrote are committed, screenshots stripped, everything else
+intact — load them in the Lighthouse Viewer:
+
+| Route | Receipt |
+| --- | --- |
+| `/` | [docs/evidence/lighthouse/index.json](evidence/lighthouse/index.json) |
+| `/unit/N-01` | [docs/evidence/lighthouse/unit-N-01.json](evidence/lighthouse/unit-N-01.json) |
+
+Read the four scores from `categories.*.score` and the metrics from
+`audits.*.numericValue` in those files, or run `pnpm lighthouse` after
+`pnpm build:static` to re-cut them. The sections below are the earlier
+hand-run measurements, kept for the method notes and the before/after story;
+where they disagree with the JSON, the JSON is current.
+
+## Lighthouse history: desktop preset, local static serve, `/`
 
 | Category | Score |
 | --- | --- |
@@ -165,7 +189,7 @@ row's `aria-label` is a composed sentence — "N-01, Prospect Row. Nominal. Batt
 but says "percent" where the row shows "73%"; that composition is a deliberate
 screen-reader choice documented in `components/console/unit-card.tsx`.
 
-## Lighthouse (desktop preset, local static serve, `/unit/N-07`)
+## Lighthouse history: desktop preset, local static serve, `/unit/N-07`
 
 Closes the audit's NPA-11 receipt gap: `/unit/[id]` prerenders as the *waiting
 state* and swaps the full instrument stack in on the worker's first snapshot —
@@ -195,7 +219,7 @@ unused-import errors; all owned code linted clean) — machine space is lazy and
 outside this page's initial load, so the scores above are unaffected, but
 re-cut the receipt after that lane lands.
 
-## Lighthouse re-cut: `/unit/N-07` after the layout reservation
+## Lighthouse history: `/unit/N-07` re-cut after the layout reservation
 
 The receipt above, re-cut on the finished build — machine space, the model
 wireframe, the resizable columns and the mobile pass all landed, lint clean, no
@@ -365,14 +389,15 @@ commit at 500, node-side). Both were changed; see the next section.
 
 ### The boundary-wave spike, removed
 
-The "first thing to change" above is changed. `lastContactAt` and
-`latestBattery` now mutate **in place** under stable record identities — the
-discipline `unitTelemetryVersions` already used (audit NPA-06), with
-`telemetryVersion` as every commit's load-bearing changed field — and
-`kpiAvgBattery` re-derives from a running battery sum in O(1) per telemetry
-move instead of an O(fleet) walk, re-seeded by every full-recompute commit
-(snapshot, alert, unit_update). `applyTelemetry` now does no O(fleet) work on
-any path.
+The "first thing to change" above was changed in two steps. The first kept
+the per-unit primitives in zustand state and mutated them in place under a
+global version counter, which removed the record spread but left every
+subscriber's selector running on every batch. The current model (below)
+removes telemetry from the store altogether; the A/B in this section is the
+receipt for the first step, kept because its numbers are what the second step
+was measured against. `kpiAvgBattery` re-derives from a running battery sum in
+O(1) per telemetry move instead of an O(fleet) walk, re-seeded by every
+full-recompute commit (snapshot, alert, unit_update).
 
 Measured as a **paired interleaved A/B** of the old and new reducers in one
 process (machine drift cancels — same method as the wireframe A/B above;
@@ -391,13 +416,26 @@ one — and the two O(fleet²)-flavored moments (populate, boundary) flatten int
 the ordinary wave cost. A 600-wave differential run (telemetry + alerts + a
 mid-run reconnect snapshot, 500 units) confirmed old and new stores agree on
 all selector-visible state at every checkpoint, and that the incremental
-battery sum equals a from-scratch recompute throughout. The subscription
-contract is test-pinned in `lib/stores/fleetStore.test.ts`: one commit per
-batch, record identities stable, last-contact subscribers re-render at most
-once per second per unit, and the KPI commits only when the rounded fleet
-average actually moves. The browser-side wave numbers above (p95 16.4–19.4 ms,
+battery sum equals a from-scratch recompute throughout. The browser-side wave numbers above (p95 16.4–19.4 ms,
 driven by these boundary waves) predate this change and should collapse toward
 their p50 — re-cut with the rAF probe on the next full stress pass.
+
+### Telemetry off the store entirely
+
+A telemetry batch now makes **zero zustand commits**. The ring buffers, the
+per-unit version counter, the quantized battery (0.1 %) and last-contact (1 s)
+live in `lib/stores/telemetryChannel.ts`, a non-reactive module with one
+listener set per unit; `recordTelemetryBatch` writes them and notifies only
+that unit's subscribers. React reads them through `useSyncExternalStore`
+hooks keyed by unit id (`useUnitTelemetryVersion`, `useUnitBattery`,
+`useUnitLastContact`), and canvas hosts poll the version from the frame
+callback. The store commits only when a reactive fact moves: the rounded fleet
+average battery, or the trending set. The contract is pinned in
+`lib/stores/fleetStore.test.ts` (no commit on a pure-telemetry batch; one
+per-unit notification) and by the render-count tripwires in
+`components/console/telemetry-strip.test.tsx` and `fleet-rail.test.tsx`; the
+500-unit stress lane (`pnpm e2e:stress`) still passes with the rail DOM
+bounded and the N-07 alert surfacing at scale.
 
 ### Trend watch: the fleet re-fitted on every commit
 
@@ -421,11 +459,11 @@ own; 2,000 iterations at 8 units, 200 at 500; 3 rounds per side, medians):
 
 Three changes, in order of what they bought:
 
-1. **Scope.** The fit memoizes per unit on `unitTelemetryVersions`, the counter
-   that tracks one unit's samples. A batch carries one unit, so a commit
-   re-fits one unit — pinned by `trendFitsForTests()` in
-   `lib/stores/trendWatch.test.ts`, because a memo change can drop this
-   silently.
+1. **Scope.** The fit runs as a reducer step for the one unit a batch
+   carries (`trendOnBatch`), and its output is a reactive `trending` field,
+   so a batch re-fits one unit and the selector stays a plain read — pinned
+   by `trendFitsForTests()` in `lib/stores/trendWatch.test.ts`, because a
+   change here can silently go back to re-fitting the fleet.
 2. **Rate.** A unit is re-fitted at most once per second of *its own*
    telemetry clock (`TREND_REFIT_MS`). A 15 s least-squares window read
    through a ±3 °C/min hysteresis band cannot tell 10 Hz from 1 Hz; the cost
@@ -442,8 +480,7 @@ Three changes, in order of what they bought:
 What is left at 500 units is the roster walk itself (a cached-number compare
 per unit per commit, ~2.5 M/s), which is where the residual 119 ms/s lives. If
 a larger fleet ever needs it, the next move is a single-unit incremental path
-keyed on which unit committed, with the full walk kept for the case where the
-selector did not see every commit (`telemetryVersion` gaps).
+keyed on which unit committed, which is what the per-batch reducer step now does.
 
 ### Out-of-order receipts (the ordering gate, instrumented)
 

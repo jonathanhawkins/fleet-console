@@ -1,4 +1,5 @@
 export * from "./ringBuffer";
+export * from "./telemetryChannel";
 export * from "./fleetStore";
 export * from "./incidentStore";
 export * from "./commandStore";

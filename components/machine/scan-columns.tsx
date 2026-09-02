@@ -283,7 +283,7 @@ export function ScanColumns({ className, inert, children }: ScanColumnsProps) {
       // puts a jump on frame one of a travel whose entire purpose is to be
       // followed. Seeded from the first frame instead, t starts at exactly zero
       // and the column cannot leave before it starts. (Measured, with numbers,
-      // in the note in components/console/incident-banner.tsx.)
+      // in the note in components/fleet/incident-banner.tsx.)
       let startedAt = -1;
       const stop = registerFrame((now) => {
         if (startedAt < 0) startedAt = now;

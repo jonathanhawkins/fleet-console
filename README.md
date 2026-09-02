@@ -33,10 +33,12 @@ Open the demo and leave it running. Timings are from page load.
 6. **ESC.** Operator space returns with the incident on file. Press the
    `INC-N07-…` reference for the report a technician would be handed.
 
-Two more storylines share the same clock: N-03 halts on a blocked route at
-2:00 and recovers itself, and from 3:00 four units raise the same warning on
-the same firmware, with a rollout to halt and a cohort to roll back. They are
-described in [docs/walkthrough.md](docs/walkthrough.md). _Reset simulation_
+Three more storylines share the same clock: N-03 halts on a blocked route at
+2:00 and recovers itself; from 3:00 four units raise the same warning on the
+same firmware, with a rollout to halt and a cohort to roll back; and at 5:30
+N-01 reports the one fault a recalibration genuinely fixes, so the same
+command that came back `PARTIAL` on the knee clears it. They are described
+in [docs/walkthrough.md](docs/walkthrough.md). _Reset simulation_
 in the footer replays everything from the same seed.
 
 ## Two worlds
@@ -108,29 +110,53 @@ summary; the numbers below are copied from that output.
 | Component view (three + GLB) < 500 KB gz | 321.7 KB, lazy                           | PASS    |
 | 500 units                                | ~5,000 batches/s, 13.4 µs/msg, p95 10 ms | PASS    |
 
+Lighthouse is a gate, not a quote: `node scripts/lighthouse.mjs` runs the
+desktop preset against `/` and `/unit/N-01` on the same export, fails under
+performance 90 or any other category under 100, and CI runs it after the
+budgets on every push. The full reports it wrote are the receipt —
+[docs/evidence/lighthouse/index.json](docs/evidence/lighthouse/index.json)
+and [docs/evidence/lighthouse/unit-N-01.json](docs/evidence/lighthouse/unit-N-01.json)
+(load either in the Lighthouse Viewer).
+
 Lazy bundles: maplibre (268.6 KB gz) on fleet-page mount, machine space
 (56.1 KB gz) warmed by the incident banner, three + R3F (249.4 KB gz) on
 scroll approach. Details and method in [docs/perf.md](docs/perf.md).
 
 ## Component library
 
-`@/components/console` wraps shadcn's Radix behaviour and re-themes it; every
-component renders in both spaces without being told which one it is in.
+Two folders, one direction of dependency. `@/components/console` is the
+library: pure primitives and hooks that import nothing from the stores, wrap
+shadcn's Radix behaviour, and render in both spaces without being told which
+one they are in. `@/components/fleet` is this app: the store-wired regions built
+out of those primitives. A lint rule enforces the direction — `console` may not
+import `lib/stores` or `components/fleet` — so a primitive that grew a
+subscription would fail the build rather than quietly become a region.
 
-| Component        | What it is                                                                                                     |
-| ---------------- | -------------------------------------------------------------------------------------------------------------- |
-| `StatusChip`     | A quiet tinted pill in operator space, an inverted `OPERATING`/`DAMAGED` block in machine space. Same element. |
-| `UnitCard`       | One home in the fleet as a fixed-height row; pure, so the rail subscribes per row.                             |
-| `FleetRail`      | The virtualized unit list. Eight units today, the same code at eight hundred.                                  |
-| `AlertRail`      | The feed. Newest first, deduped, capped, and the only region allowed to raise its voice.                       |
-| `FleetMap`       | MapLibre behind a dynamic boundary; marker DOM is mutated imperatively, never reconciled.                      |
-| `TelemetryStrip` | One joint, one measure, as a canvas instrument on the shared frame loop.                                       |
-| `StatusTimeline` | The session as one band: has this unit been fine, and when did that stop.                                      |
-| `IncidentBanner` | The one loud object in operator space. Holds the single primary action.                                        |
-| `DescentOverlay` | The gate: decides when the descent may begin, drains the page, mounts machine space lazily.                    |
-| `ComponentView`  | The 3D chassis behind its own dynamic boundary.                                                                |
+| Console primitive                 | What it is                                                                                                     |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `StatusChip`                      | A quiet tinted pill in operator space, an inverted `OPERATING`/`DAMAGED` block in machine space. Same element. |
+| `ConsoleButton`                   | The one black pill per screen, and its quieter siblings; square and mono below the descent.                    |
+| `ConsoleCard`                     | A surface separated by warmth and a hairline, never by weight.                                                 |
+| `UnitCard`                        | One home in the fleet as a fixed-height row; pure, so the rail subscribes per row.                             |
+| `BatteryMeter`                    | A charge level as a bar, not a gauge.                                                                          |
+| `StatGroup`                       | A labelled figure that renders an em-dash, never an invented number, while pending.                            |
+| `SectionLabel`                    | The wide-tracked small-caps label that names every region.                                                     |
+| `ConsoleHeader` / `ConsoleFooter` | The shell: the typographic mark, and the disclaimer on every page.                                             |
+| `registerFrame`                   | The one shared rAF loop every canvas instrument draws on.                                                      |
 
-Machine space lives in `components/machine` and is not re-exported from the
+| Fleet region     | What it is                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------- |
+| `FleetRail`      | The virtualized unit list. Eight units today, the same code at eight hundred.               |
+| `AlertRail`      | The feed. Newest first, deduped, capped, and the only region allowed to raise its voice.    |
+| `FleetMap`       | MapLibre behind a dynamic boundary; marker DOM is mutated imperatively, never reconciled.   |
+| `TelemetryStrip` | One joint, one measure, as a canvas instrument on the shared frame loop.                    |
+| `StatusTimeline` | The session as one band: has this unit been fine, and when did that stop.                   |
+| `IncidentBanner` | The one loud object in operator space. Holds the single primary action.                     |
+| `DescentOverlay` | The gate: decides when the descent may begin, drains the page, mounts machine space lazily. |
+| `ComponentView`  | The 3D chassis behind its own dynamic boundary.                                             |
+| `CohortCard`     | The fleet incident: four robots on one build, the halt, the staged rollback.                |
+
+Machine space lives in `components/machine` and is not re-exported from either
 barrel, so it never rides in the unit page's initial JS: `ScanLog`,
 `WaveformDeck`, `StatusBoard` + `PartsManifest`, and `VerdictCard`.
 

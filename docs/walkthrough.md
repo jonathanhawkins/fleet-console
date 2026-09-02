@@ -1,9 +1,9 @@
-# Walkthrough — the demo in three acts
+# Walkthrough — the demo in four acts
 
 Open the [live demo](https://fleet-console.pages.dev) and leave it running.
-Three storylines play on one shared clock: an escalation, a self-recovery, and
-a fleet-wide rollout. They run whether or not you are looking, and the whole
-arc fits inside five minutes. Timings are from page load; _Reset simulation_
+Four storylines play on one shared clock: an escalation, a self-recovery,
+a fleet-wide rollout, and a calibration that works. They run whether or not you are looking, and the whole
+arc fits inside six minutes. Timings are from page load; _Reset simulation_
 in the footer replays everything from the same seed.
 
 ## Act 1 — one robot, escalating (0:15 → 1:15)
@@ -90,3 +90,21 @@ Hesitate past 4:30 and the install lands, N-05 raises the same warning at 4:40,
 and the halt is refused with `NO ROLLOUT ACTIVE`. Halting late does not
 un-install. Four units telling the same story, correlated by firmware, is the
 pattern no single unit page could surface.
+
+## Act 4 — the fault a calibration actually fixes (5:30)
+
+N-01's right ankle encoder has a drifted zero. It has been wrong since the
+first sample of the run, and a diagnostic on N-01 finds it at any time — the
+trace has the right shape displaced from its reference, an *offset* rather
+than the knee's *gain* fault. What waits until **5:30** is the unit's own
+detector: gait asymmetry is a slow statistical estimate over many strides, so
+the amber lands minutes after a thermal runaway would. It stays amber. Nothing
+is getting worse, and an alert that climbed to red would be the sim inventing
+urgency.
+
+**Click N-01, run the diagnostic, command safe sit, then Recalibrate joint.**
+Re-zeroing an encoder is exactly what a calibration is, so the ladder stops at
+the remote rung: the trace returns to its reference, the alert clears with
+`Resolved · recalibrated`, and nobody drives anywhere. On N-07 the same
+command reports `PARTIAL`, because a rewritten gain table cannot fix tendon
+wear. Two faults, one mechanism, two honest outcomes.

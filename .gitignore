@@ -1,0 +1,47 @@
+# macOS
+.DS_Store
+
+# dependencies
+node_modules/
+/.pnp
+.pnp.*
+
+# next.js
+/.next/
+/out/
+# parked e2e artifacts (playwright.config.ts)
+/.e2e-cohort/
+/build
+next-env.d.ts.bak
+
+# testing
+/coverage
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# misc
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+
+# local-only: design reference captures (third-party material, never published)
+/docs/images/*.png
+
+# local-only session tooling
+/.claude/
+CLAUDE.local.md

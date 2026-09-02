@@ -1,0 +1,386 @@
+/* ---------------------------------------------------------------------------
+   The operator shell grid (fleet page). Named areas: a region claims a room,
+   not a set of coordinates. Under 64rem the three regions stack in order of
+   use (map, rail, feed); at 64rem and up the rail runs full height on the
+   right and the feed sits under the map. Row sizing is fractional, never
+   fixed, so a short laptop does not overflow the fold.
+--------------------------------------------------------------------------- */
+@layer components {
+  /* The shell is content-sized: the rail's scrollport carries its own height
+     (rows × MAX_VISIBLE_ROWS, fleet-rail.tsx), the grid takes its height from
+     the rail, and the page grows as a document when it needs more than the
+     viewport. Below 64rem the stacked rail row is bounded by 75dvh instead. */
+  .shell-grid {
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: minmax(0, 1fr);
+    /* The stacked rail row caps at 75dvh: at 500 units content height is the
+       whole fleet. Exact at the 768px floor — 8 rows still render uncut. */
+    grid-template-rows: minmax(20rem, 45vh) minmax(15rem, 75dvh) minmax(11rem, auto);
+    grid-template-areas:
+      "map"
+      "rail"
+      "feed";
+  }
+
+  @media (min-width: 64rem) {
+    .shell-grid {
+      min-height: 0;
+      grid-template-columns: minmax(0, 1fr) 20rem;
+      grid-template-rows: minmax(0, 1fr) minmax(9rem, 0.4fr);
+      grid-template-areas:
+        "map  rail"
+        "feed rail";
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The fleet map. The marker DOM is built in components/console/fleet-map-
+   marker.ts, which knows structure and state but no colour: every token here
+   is applied by attribute selector on `data-status`, so a status flip is one
+   attribute write. The basemap is WebGL; its colours are in
+   public/map/fleet-light.json.
+--------------------------------------------------------------------------- */
+@layer components {
+  .fleet-map {
+    position: relative;
+    background-color: var(--bg);
+  }
+
+  /* -- return control ------------------------------------------------------ */
+
+  /* The way back (map-return.ts), top-right. Neutral state wears the marker
+     label's plate; the off-map-alert state takes the status tint + ink
+     pairing. Above the hovered marker's z-index 4. */
+  .map-return {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    z-index: 6;
+    padding: 0.3rem 0.75rem;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-pill);
+    background-color: var(--bg);
+    box-shadow: var(--elev-card);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: var(--fs-label);
+    line-height: var(--lh-label);
+    letter-spacing: var(--tr-label);
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-micro) var(--ease-console),
+      border-color var(--dur-micro) var(--ease-console),
+      color var(--dur-micro) var(--ease-console);
+  }
+  .map-return:hover {
+    background-color: var(--surface);
+  }
+  .map-return[data-alerting] {
+    border-color: var(--alert);
+    background-color: var(--alert-tint);
+    color: var(--alert-ink);
+  }
+  .map-return[data-alerting]:hover {
+    background-color: var(--bg);
+  }
+
+  /* -- marker ------------------------------------------------------------- */
+
+  /* MapLibre owns `position` and `transform` on this element; nothing here
+     may touch either. */
+  .fleet-marker {
+    --marker-ring: var(--muted);
+    --marker-fill: var(--bg);
+    display: block;
+    width: 30px;
+    height: 30px;
+    border-radius: var(--r-pill);
+    color: var(--ink-soft);
+    text-decoration: none;
+  }
+
+  /* Warn and alert take the status tint on the dial and the status ink on the
+     glyph — StatusChip's pairing. Nominal keeps the unfilled dial. */
+  .fleet-marker[data-status="nominal"] {
+    --marker-ring: var(--nominal);
+  }
+  .fleet-marker[data-status="warn"] {
+    --marker-ring: var(--warn);
+    --marker-fill: var(--warn-tint);
+    color: var(--warn-ink);
+    z-index: 2;
+  }
+  .fleet-marker[data-status="alert"] {
+    --marker-ring: var(--alert);
+    --marker-fill: var(--alert-tint);
+    color: var(--alert-ink);
+    z-index: 3;
+  }
+  .fleet-marker:hover,
+  .fleet-marker:focus-visible {
+    z-index: 4;
+  }
+
+  /* Member of a live firmware cohort: a hairline held off the dial in the
+     neutral --cohort-mark. An outline, so it costs no layout, inherits the
+     radius, rides the hover scale, and cannot be confused with the ping ring. */
+  .fleet-marker[data-cohort] .fleet-marker__dial {
+    outline: 1px solid var(--cohort-mark);
+    outline-offset: 2.5px;
+  }
+
+  /* The dial stays 30px; the hit area grows to the 44×44 WCAG floor on coarse
+     pointers only. */
+  @media (pointer: coarse) {
+    .fleet-marker::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 44px;
+      height: 44px;
+      transform: translate(-50%, -50%);
+    }
+  }
+
+  /* The dial's transition comes from the unlayered press contract
+     (motion.css). The hover shadow does NOT animate on the dial itself — this
+     is the product's highest-frequency hover — so the raised shadow is
+     pre-painted on a ::after and faded in by opacity. */
+  .fleet-marker__dial {
+    position: relative;
+    display: grid;
+    width: 100%;
+    height: 100%;
+    place-items: center;
+    border: 1.5px solid var(--marker-ring);
+    border-radius: var(--r-pill);
+    background-color: var(--marker-fill);
+    box-shadow: var(--elev-card);
+  }
+
+  /* --elev-raised at opacity 0, waiting. inset -1.5px spans the dial's border
+     box; in machine space every elevation token is `none`. */
+  .fleet-marker__dial::after {
+    content: "";
+    position: absolute;
+    inset: -1.5px;
+    border-radius: inherit;
+    box-shadow: var(--elev-raised);
+    opacity: 0;
+    transition: opacity var(--dur-micro) var(--ease-console);
+  }
+
+  .fleet-marker:hover .fleet-marker__dial,
+  .fleet-marker:focus-visible .fleet-marker__dial {
+    transform: scale(1.09);
+  }
+
+  .fleet-marker:hover .fleet-marker__dial::after,
+  .fleet-marker:focus-visible .fleet-marker__dial::after {
+    opacity: 1;
+  }
+
+  .fleet-marker__glyph {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* One ring, once, when a unit's status worsens — fired by toggling
+     `data-ping` (fleet-map-marker.ts). Rests at opacity 0, so the
+     reduced-motion clamp resolves it to nothing rather than a frozen ring. */
+  .fleet-marker__ping {
+    position: absolute;
+    inset: -4px;
+    border: 1px solid var(--marker-ring);
+    border-radius: var(--r-pill);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .fleet-marker[data-ping] .fleet-marker__ping {
+    animation: fleet-marker-ping 700ms var(--ease-console) 1;
+  }
+
+  @keyframes fleet-marker-ping {
+    0% {
+      opacity: 0.9;
+      transform: scale(0.9);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.9);
+    }
+  }
+
+  /* Identity on demand: the label appears on hover/focus only. */
+  .fleet-marker__label {
+    position: absolute;
+    top: calc(100% + 7px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.15rem 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    background-color: var(--bg);
+    box-shadow: var(--elev-card);
+    color: var(--ink);
+    font-size: var(--fs-label);
+    line-height: var(--lh-label);
+    letter-spacing: var(--tr-label);
+    text-transform: uppercase;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--dur-micro) var(--ease-console);
+  }
+
+  .fleet-marker:hover .fleet-marker__label,
+  .fleet-marker:focus-visible .fleet-marker__label {
+    opacity: 1;
+  }
+
+  /* -- privacy note ----------------------------------------------- */
+
+  /* "Locations approximate" — the attribution plate's mirror, opposite
+     corner (fleet-map-privacy.ts). pointer-events off: a caption must never
+     eat a pan. */
+  .fleet-map-note {
+    pointer-events: none;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    z-index: 1;
+    padding: 0.1rem 0.5rem;
+    border-radius: 0 var(--r-pill) 0 0;
+    background-color: color-mix(in srgb, var(--bg) 78%, transparent);
+    font-family: var(--font-space);
+    font-size: 0.625rem;
+    line-height: 1.6;
+    /* --ink-soft: 10px text still owes AA contrast. */
+    color: var(--ink-soft);
+  }
+
+  /* -- MapLibre chrome ----------------------------------------------------- */
+
+  .fleet-map .maplibregl-ctrl-attrib {
+    /* Required by the tile licence — never removed, only quietened. */
+    padding: 0.1rem 0.5rem;
+    border-radius: var(--r-pill) 0 0 0;
+    background-color: color-mix(in srgb, var(--bg) 78%, transparent);
+    font-family: var(--font-space);
+    font-size: 0.625rem;
+    line-height: 1.6;
+  }
+
+  .fleet-map .maplibregl-ctrl-attrib,
+  .fleet-map .maplibregl-ctrl-attrib a {
+    /* --ink-soft, not --muted: text at 10px owes AA. */
+    color: var(--ink-soft);
+    text-decoration: none;
+  }
+
+  .fleet-map .maplibregl-ctrl-attrib a:hover {
+    color: var(--ink);
+    text-decoration: underline;
+  }
+
+  .fleet-map .maplibregl-ctrl-attrib.maplibregl-compact-show,
+  .fleet-map .maplibregl-ctrl-bottom-right {
+    z-index: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   A diagnostic running: the incident banner's in-progress state as a 1px
+   segment travelling the bottom edge. Not a determinate bar — the console
+   does not know how long a scan takes. Hidden outright under reduced motion:
+   a clamped sweep would park at one end and read as a stalled progress bar.
+--------------------------------------------------------------------------- */
+@layer components {
+  .diag-sweep {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  .diag-sweep::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 28%;
+    height: 100%;
+    background-image: linear-gradient(to right, transparent, var(--ink) 50%, transparent);
+    opacity: 0.5;
+    animation: diag-sweep 1600ms var(--ease-console) infinite;
+  }
+
+  @keyframes diag-sweep {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(460%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .diag-sweep {
+      display: none;
+    }
+  }
+}
+
+/* An alert arriving: a 180 ms fade with a 6px settle, the only entrance in
+   operator space. `both` matters — under the reduced-motion clamp the
+   animation holds its end state, so the row appears rather than flickering. */
+@layer components {
+  .alert-enter {
+    animation: alert-enter var(--dur-enter) var(--ease-console) both;
+  }
+
+  @keyframes alert-enter {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* The connecting dot breathes while the transport works: 1200 ms, floor 0.45
+   so it never reads as gone. Reduced motion gets an explicit static
+   mid-breath rather than the clamp's parked base opacity. */
+@layer components {
+  .connection-breathe {
+    animation: connection-breathe 1200ms var(--ease-console) infinite;
+  }
+
+  @keyframes connection-breathe {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .connection-breathe {
+      animation: none;
+      opacity: 0.7;
+    }
+  }
+}

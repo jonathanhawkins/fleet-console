@@ -1,0 +1,92 @@
+/* PRESS — the frame the finger goes down, on `:active`. Unlayered on purpose:
+   the `transition-colors` utility would otherwise drop transform from the list. */
+[data-console="button"],
+[data-slot="machine-control"],
+[data-slot="unit-card"],
+[data-slot="alert-row"],
+.fleet-marker__dial {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-duration: var(--dur-micro);
+  transition-timing-function: var(--ease-console);
+}
+
+[data-console="button"]:active,
+[data-slot="machine-control"]:active,
+[data-slot="unit-card"]:active,
+[data-slot="alert-row"]:active,
+.fleet-marker:active .fleet-marker__dial {
+  transition-duration: var(--dur-press);
+}
+
+[data-console="button"]:active:not([disabled]) {
+  transform: scale(0.97);
+  box-shadow: none;
+}
+
+/* Machine space lights up instead of squashing. */
+[data-space="machine"] [data-console="button"]:active:not([disabled]),
+[data-space="machine"] [data-slot="machine-control"]:active {
+  transform: none;
+  border-color: var(--ink-hover);
+  background-color: var(--ink-hover);
+  color: var(--bg);
+}
+
+/* Cancels the standalone `translate` property. The var() indirection is
+   load-bearing: a literal `translate: none` is folded away by the minifier. */
+[data-space="machine"] [data-console="button"]:active:not([disabled]),
+[data-space="machine"] [data-slot="machine-control"]:active {
+  translate: var(--translate-cancel, none);
+}
+
+/* A control that rests inverted (primary) inverts the other way when pressed. */
+[data-space="machine"]
+  [data-console="button"][data-variant="primary"]:active:not([disabled]) {
+  border-color: var(--ink-hover);
+  background-color: var(--bg);
+  color: var(--ink-hover);
+}
+
+/* Rows take the ground instead of scaling. */
+[data-slot="unit-card"]:active,
+[data-slot="alert-row"]:active {
+  background-color: var(--press);
+}
+
+.fleet-marker:active .fleet-marker__dial {
+  transform: scale(0.97);
+}
+
+.fleet-marker:active .fleet-marker__dial::after {
+  opacity: 0;
+  transition-duration: var(--dur-press);
+}
+
+/* REDUCED MOTION. Transitions clamp to 0s, not 0.01ms: a non-zero duration
+   makes synchronous style reads answer with the previous frame. Animations
+   keep 0.01ms × 1 so they still fire their events and fill. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* THE DESCENT — beat 1: the page greys under the overlay (descent-overlay.tsx
+   writes the attribute). The transition sits on the base rule so it survives
+   the attribute's removal; --descent-dim-ms has no fallback on purpose. */
+@layer components {
+  body > *:not([data-descent-layer]) {
+    transition: filter var(--descent-dim-ms) linear;
+  }
+
+  html[data-descent="under"] body > *:not([data-descent-layer]) {
+    filter: grayscale(1) brightness(0.58);
+  }
+}

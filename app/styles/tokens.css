@@ -1,0 +1,306 @@
+/* Token layer. Every token is defined twice, on [data-space="operator"] and
+   [data-space="machine"]; components read the semantic slots (layer 2), never
+   the raw palette (layer 1), and @theme (layer 3) binds Tailwind utilities to
+   layer 2. The spaces are contexts, not a preference: there is no toggle. */
+
+/* `machine:` / `operator:` variants, used sparingly. */
+@custom-variant operator (&:where([data-space="operator"], [data-space="operator"] *));
+@custom-variant machine (&:where([data-space="machine"], [data-space="machine"] *));
+
+/* OPERATOR SPACE — calm, warm white, consumer-grade. No neon. Ever. */
+[data-space="operator"] {
+  color-scheme: light;
+
+  /* -- layer 1: primitives ------------------------------------------------ */
+  --warm-white: #fafaf9;
+  --greige: #f2f1ed;
+  --greige-deep: #eae8e2;
+  --charcoal: #171715;
+  --stone: #57564f;
+  --gray: #8b8a84;
+  --hairline: #e4e2dc;
+  --sage: #5e7d5a;
+  --amber: #b8862f;
+  --clay: #b5473a;
+
+  /* -- layer 2: semantic slots -------------------------------------------- */
+  --bg: var(--warm-white);
+  --surface: var(--greige);
+  --surface-2: var(--greige-deep);
+  --ink: var(--charcoal);
+  /* secondary text at every size — 7.05:1, AA at 11px and up */
+  --ink-soft: var(--stone);
+  /* --muted USAGE RULE (AA): 3.31:1 on --bg, so large text (>=24px) and
+     non-text graphics only. Secondary text at body size or below uses --ink-soft. */
+  --muted: var(--gray);
+  --line: var(--hairline);
+  --line-strong: color-mix(in srgb, var(--charcoal) 18%, var(--bg));
+
+  /* The cohort mark: a grouping, not a severity — ink-derived, never a hue. */
+  --cohort-mark: color-mix(in srgb, var(--charcoal) 34%, var(--bg));
+
+  --nominal: var(--sage);
+  --warn: var(--amber);
+  --alert: var(--clay);
+  /* the one dark accent — operator space has no magenta */
+  --signal: var(--charcoal);
+
+  --nominal-tint: color-mix(in srgb, var(--nominal) 13%, var(--bg));
+  --warn-tint: color-mix(in srgb, var(--warn) 13%, var(--bg));
+  --alert-tint: color-mix(in srgb, var(--alert) 12%, var(--bg));
+
+  /* Status colours as TEXT: pulled toward the ink to clear 4.5:1 at label size. */
+  --nominal-ink: color-mix(in srgb, var(--nominal) 72%, var(--charcoal));
+  --warn-ink: color-mix(in srgb, var(--warn) 62%, var(--charcoal));
+  --alert-ink: color-mix(in srgb, var(--alert) 88%, var(--charcoal));
+
+  /* hover state for a solid --ink ground: the pill lifts toward the page */
+  --ink-hover: color-mix(in srgb, var(--charcoal) 86%, var(--warm-white));
+
+  --ring: var(--stone);
+  --selection: color-mix(in srgb, var(--charcoal) 12%, transparent);
+
+  /* The ground under a pressed row: one step past --surface-2. */
+  --press: color-mix(in srgb, var(--charcoal) 7%, var(--surface-2));
+
+  /* geometry — generous radius, pill buttons */
+  --radius: 0.75rem;
+  --r-pill: 9999px;
+
+  /* elevation — soft, single-direction, warm-tinted (never neutral black) */
+  --elev-pill: 0 1px 2px 0 rgb(23 23 21 / 0.1);
+  --elev-card: 0 1px 2px 0 rgb(23 23 21 / 0.04);
+  --elev-raised: 0 1px 2px 0 rgb(23 23 21 / 0.05), 0 12px 28px -18px rgb(23 23 21 / 0.22);
+
+  /* type — Geist Sans, sentence case, wide-tracked uppercase labels */
+  --font-space: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --case-heading: none;
+
+  --fs-display: 2.75rem;
+  --lh-display: 1.08;
+  --tr-display: -0.022em;
+  --fw-display: 400;
+
+  --fs-title: 1.75rem;
+  --lh-title: 1.2;
+  --tr-title: -0.015em;
+  --fw-title: 400;
+
+  --fs-heading: 1.125rem;
+  --lh-heading: 1.45;
+  --tr-heading: -0.005em;
+  --fw-heading: 500;
+
+  --fs-body: 0.9375rem;
+  --lh-body: 1.6;
+  --tr-body: 0em;
+  --fw-body: 400;
+
+  --fs-small: 0.8125rem;
+  --lh-small: 1.5;
+  --tr-small: 0em;
+
+  --fs-label: 0.6875rem;
+  --lh-label: 1.4;
+  --tr-label: 0.16em;
+  --fw-label: 500;
+}
+
+/* MACHINE SPACE — phosphor mono on near-black. Radius 0. No shadows. No pills. Ever. */
+[data-space="machine"] {
+  color-scheme: dark;
+
+  /* -- layer 1: primitives ------------------------------------------------ */
+  --void: #060606;
+  --phosphor: #3bff6f;
+  --amber: #ffb000;
+  --alert-red: #ff3b30;
+  --magenta: #ff3e9a;
+  --grid: #1c1c1c;
+
+  /* -- layer 2: semantic slots -------------------------------------------- */
+  --bg: var(--void);
+  --surface: #0b0b0b;
+  --surface-2: #111111;
+  --ink: var(--phosphor);
+  --ink-soft: color-mix(in srgb, var(--phosphor) 68%, var(--void));
+  /* The dimmest luminance tier; the operator --muted ruling does not apply here. */
+  --muted: color-mix(in srgb, var(--phosphor) 52%, var(--void));
+  --line: var(--grid);
+  --line-strong: color-mix(in srgb, var(--phosphor) 34%, var(--void));
+  /* The operator token's twin: grouping, not severity. */
+  --cohort-mark: color-mix(in srgb, var(--phosphor) 45%, var(--void));
+
+  --nominal: var(--phosphor);
+  --warn: var(--amber);
+  --alert: var(--alert-red);
+  /* magenta, used sparingly */
+  --signal: var(--magenta);
+
+  --nominal-tint: color-mix(in srgb, var(--nominal) 15%, var(--bg));
+  --warn-tint: color-mix(in srgb, var(--warn) 15%, var(--bg));
+  --alert-tint: color-mix(in srgb, var(--alert) 15%, var(--bg));
+
+  /* Phosphor on the void clears AA; the -ink slots alias the status tokens. */
+  --nominal-ink: var(--nominal);
+  --warn-ink: var(--warn);
+  --alert-ink: var(--alert);
+
+  /* a phosphor block cannot get warmer, so it gets hotter */
+  --ink-hover: color-mix(in srgb, var(--phosphor) 78%, white);
+
+  --ring: var(--phosphor);
+  --selection: var(--phosphor);
+
+  /* No tinted grounds to step through: pressing a thing here lights it. */
+  --press: var(--nominal-tint);
+
+  /* geometry — square, always */
+  --radius: 0px;
+  --r-pill: 0px;
+
+  /* elevation — there is none */
+  --elev-pill: none;
+  --elev-card: none;
+  --elev-raised: none;
+
+  /* type — JetBrains Mono everywhere, uppercase headings, dense leading */
+  --font-space:
+    var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --case-heading: uppercase;
+
+  --fs-display: 2.25rem;
+  --lh-display: 1.15;
+  --tr-display: 0.01em;
+  --fw-display: 500;
+
+  --fs-title: 1.25rem;
+  --lh-title: 1.2;
+  --tr-title: 0.02em;
+  --fw-title: 500;
+
+  --fs-heading: 0.9375rem;
+  --lh-heading: 1.35;
+  --tr-heading: 0.08em;
+  --fw-heading: 500;
+
+  --fs-body: 0.8125rem;
+  --lh-body: 1.45;
+  --tr-body: 0.01em;
+  --fw-body: 400;
+
+  --fs-small: 0.75rem;
+  --lh-small: 1.4;
+  --tr-small: 0.02em;
+
+  --fs-label: 0.625rem;
+  --lh-label: 1.3;
+  --tr-label: 0.18em;
+  --fw-label: 500;
+}
+
+/* Motion contract: 120–180 ms micro-transitions; --dur-press sits below the
+   band because it is acknowledgement, not a state change. The descent's
+   clock lives in components/console/descent-motion.ts. */
+:root {
+  --dur-press: 100ms;
+  --dur-micro: 140ms;
+  --dur-enter: 180ms;
+}
+
+/* Layer 3 — Tailwind theme. `inline` keeps the var() reference in the utility
+   so every class re-resolves against whichever space it renders inside. */
+@theme inline {
+  /* -- fonts -------------------------------------------------------------- */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* -- surfaces and ink --------------------------------------------------- */
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-hover: var(--ink-hover);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-press: var(--press);
+
+  /* -- status ------------------------------------------------------------- */
+  --color-nominal: var(--nominal);
+  --color-warn: var(--warn);
+  --color-alert: var(--alert);
+  --color-signal: var(--signal);
+  --color-nominal-tint: var(--nominal-tint);
+  --color-warn-tint: var(--warn-tint);
+  --color-alert-tint: var(--alert-tint);
+  --color-nominal-ink: var(--nominal-ink);
+  --color-warn-ink: var(--warn-ink);
+  --color-alert-ink: var(--alert-ink);
+
+  /* -- geometry ----------------------------------------------------------- */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-pill: var(--r-pill);
+
+  /* -- motion ------------------------------------------------------------- */
+  /* The one easing; referenced bare, no per-site fallback, so a broken ref fails visibly. */
+  --ease-console: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* -- type scale --------------------------------------------------------- */
+  --text-display: var(--fs-display);
+  --text-display--line-height: var(--lh-display);
+  --text-display--letter-spacing: var(--tr-display);
+  --text-display--font-weight: var(--fw-display);
+
+  --text-title: var(--fs-title);
+  --text-title--line-height: var(--lh-title);
+  --text-title--letter-spacing: var(--tr-title);
+  --text-title--font-weight: var(--fw-title);
+
+  --text-heading: var(--fs-heading);
+  --text-heading--line-height: var(--lh-heading);
+  --text-heading--letter-spacing: var(--tr-heading);
+  --text-heading--font-weight: var(--fw-heading);
+
+  --text-body: var(--fs-body);
+  --text-body--line-height: var(--lh-body);
+  --text-body--letter-spacing: var(--tr-body);
+  --text-body--font-weight: var(--fw-body);
+
+  --text-small: var(--fs-small);
+  --text-small--line-height: var(--lh-small);
+  --text-small--letter-spacing: var(--tr-small);
+
+  --text-label: var(--fs-label);
+  --text-label--line-height: var(--lh-label);
+  --text-label--letter-spacing: var(--tr-label);
+  --text-label--font-weight: var(--fw-label);
+
+  --tracking-label: var(--tr-label);
+  --tracking-heading: var(--tr-heading);
+
+  /* -- shadcn compatibility: components/ui reads these names --------------- */
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--ink);
+  --color-primary-foreground: var(--bg);
+  --color-secondary: var(--surface);
+  --color-secondary-foreground: var(--ink);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--surface-2);
+  --color-accent-foreground: var(--ink);
+  --color-destructive: var(--alert);
+  --color-border: var(--line);
+  --color-input: var(--line);
+  --color-ring: var(--ring);
+}

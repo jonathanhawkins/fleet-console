@@ -1,0 +1,355 @@
+/* CRT texture: 1px scan lines at 3.5%, under the 4% ceiling. */
+[data-space="machine"] {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-space="machine"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--phosphor) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+/* THE SCAN — machine space's one layout: walk | board | channels, divided by
+   `gap: 1px` over a --grid background. Under 48rem the panels stack in phone
+   reading order (sweep, board, log); from 48rem the log takes a left column;
+   from 64rem all three stand side by side. The 48/64rem values are pinned by
+   machine-layout.test.ts against this file. The side columns are custom
+   properties so the dividers can be dragged (scan-columns.tsx). */
+@layer components {
+  .scan-grid {
+    /* Read at 64rem and up; inert while the layout is stacked. */
+    --scan-log: 20rem;
+    --scan-sweep: 20rem;
+
+    position: relative;
+    display: grid;
+    min-height: 0;
+    gap: 1px;
+    background-color: var(--line);
+    grid-template-columns: minmax(0, 1fr);
+    /* max-content, not auto: the panels' `overflow: hidden` zeroes their
+       automatic minimum, and `auto` tracks would squeeze all three. */
+    grid-template-rows: max-content max-content max-content;
+    align-content: start;
+    grid-template-areas:
+      "waves"
+      "board"
+      "log";
+    /* `hidden auto`, never `auto`: the board must not drag sideways. */
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+  }
+
+  /* The handles sit over the gaps and must not paint out the rule. */
+  .scan-grid > *:not([data-slot="scan-handle"]) {
+    min-width: 0;
+    background-color: var(--bg);
+  }
+
+  @media (min-width: 48rem) {
+    .scan-grid {
+      grid-template-columns: minmax(0, 19rem) minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto;
+      align-content: normal;
+      grid-template-areas:
+        "log board"
+        "log waves";
+      /* A board fits, by construction. Nothing here scrolls but the panels. */
+      overflow: visible;
+    }
+
+    /* From here the panels are cells of one instrument that has to fit. */
+    .scan-grid > *:not([data-slot="scan-handle"]) {
+      min-height: 0;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .scan-grid {
+      grid-template-columns:
+        minmax(0, var(--scan-log)) minmax(0, 1fr)
+        minmax(0, var(--scan-sweep));
+      grid-template-rows: minmax(0, 1fr);
+      grid-template-areas: "log board waves";
+    }
+  }
+
+  /* 24rem fits the longest walked path (37 chars at 12px mono) uncut. */
+  @media (min-width: 80rem) {
+    .scan-grid {
+      --scan-log: 24rem;
+      --scan-sweep: 23rem;
+    }
+  }
+}
+
+/* THE COLUMN DIVIDERS: a transparent 8px strip on each gap, reading the same
+   custom properties that size the tracks so they cannot drift. */
+@layer components {
+  .scan-handle {
+    position: absolute;
+    z-index: 3;
+    inset-block: 0;
+    display: none;
+    width: 8px;
+    cursor: col-resize;
+    /* The pointer owns the gesture once it is down. */
+    touch-action: none;
+    user-select: none;
+  }
+
+  .scan-handle[data-edge="log"] {
+    left: calc(var(--scan-log) + 0.5px);
+    transform: translateX(-50%);
+  }
+
+  .scan-handle[data-edge="sweep"] {
+    right: calc(var(--scan-sweep) + 0.5px);
+    transform: translateX(50%);
+  }
+
+  .scan-handle::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 50%;
+    width: 1px;
+    transform: translateX(-50%);
+    background-color: var(--phosphor);
+    opacity: 0;
+    transition: opacity var(--dur-micro) var(--ease-console);
+  }
+
+  .scan-handle:hover::before,
+  .scan-handle:focus-visible::before,
+  .scan-handle[data-dragging="true"]::before {
+    opacity: 1;
+  }
+
+  /* Only where there are three columns to divide. */
+  @media (min-width: 64rem) {
+    .scan-handle {
+      display: block;
+    }
+  }
+}
+
+/* THE VERDICT SHEET (verdict-sheet.tsx): the header is the drag handle;
+   elsewhere the scroller keeps the gesture. */
+@layer components {
+  [data-sheet-grab] {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* A surface with a hand on it is not a surface being read. */
+  [data-slot="verdict-slide"][data-dragging] {
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: grabbing;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   THE DESCENT — beat 2: the leading edge. A 1px phosphor rule at the top of
+   the wiping surface with a short spill above it; a child of the surface, so
+   it rides the wipe with no second animation. After landing it becomes the
+   board's top frame line, dimmed by the stage's `edge` variant.
+--------------------------------------------------------------------------- */
+@layer components {
+  .descent-edge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 1px;
+    background-color: var(--phosphor);
+    pointer-events: none;
+  }
+
+  .descent-edge::before {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    left: 0;
+    height: 22px;
+    background-image: linear-gradient(
+      to top,
+      color-mix(in srgb, var(--phosphor) 12%, transparent),
+      transparent
+    );
+  }
+
+  /* prefers-reduced-motion: no wipe to lead, only the frame line. */
+  .descent-edge--static {
+    opacity: 0.34;
+  }
+
+  .descent-edge--static::before {
+    display: none;
+  }
+}
+
+/* CHANNEL SWEEP — one strip: a gutter with the rotated channel name and its
+   ordinal, then the trace field (canvas). */
+@layer components {
+  .wave-strip {
+    display: grid;
+    flex: 1 1 0;
+    min-height: var(--wave-strip-h);
+    grid-template-columns: 1.75rem minmax(0, 1fr);
+    align-items: stretch;
+    /* A sealed box: nothing a canvas draws may reach the next strip. */
+    overflow: hidden;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .wave-strip:last-of-type {
+    border-bottom: 0;
+  }
+
+  .wave-strip:nth-of-type(odd) {
+    background-color: var(--surface);
+  }
+
+  .wave-strip__gutter {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Bottom padding walls off the ordinal's zone below the rotated name. */
+    padding: 0.375rem 0 1.05rem;
+    border-right: 1px solid var(--line);
+    color: var(--warn);
+  }
+
+  /* Absolute so the name stays centred whatever height the strip flexes to. */
+  .wave-strip__ord {
+    position: absolute;
+    bottom: 0.25rem;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .wave-strip__name {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 0.5625rem;
+    line-height: 1;
+    letter-spacing: 0.1em;
+    opacity: 0.82;
+    overflow: hidden;
+  }
+
+  .wave-strip__ord {
+    font-size: 0.5625rem;
+    line-height: 1;
+    opacity: 0.55;
+  }
+
+  /* `overflow: hidden` is a floor guard, not a scroller: clipping the sixth
+     strip beats drawing traces over the readout below. */
+  .wave-deck {
+    --wave-strip-h: 58px;
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Phone: 46px strips; the rotated name would clip, so the gutter keeps only
+     the ordinal and the channel readout below carries the names. */
+  @media (max-width: 47.999rem) {
+    .wave-deck {
+      --wave-strip-h: 46px;
+    }
+
+    .wave-strip__name {
+      display: none;
+    }
+
+    .wave-strip__ord {
+      position: static;
+      transform: none;
+      opacity: 0.75;
+    }
+  }
+}
+
+/* PARTS MANIFEST — the dot leader. A radial gradient, not a dotted border,
+   so the dots stay on a 4px grid at any zoom. */
+@layer components {
+  .manifest-leader {
+    flex: 1 1 auto;
+    min-width: 1.5rem;
+    height: 1em;
+    background-image: radial-gradient(
+      circle at 1px 50%,
+      var(--line-strong) 0 1px,
+      transparent 1px
+    );
+    background-size: 4px 100%;
+    background-repeat: repeat-x;
+    opacity: 0.5;
+  }
+}
+
+/* THE FLAG BEAT: a 1px alert rule with a bloom trailing it, translated across
+   by the component. The only glow in the product. */
+@layer components {
+  .flag-beat {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 3;
+    width: 1px;
+    background-color: var(--alert);
+    pointer-events: none;
+  }
+
+  /* Only the travelling rule warrants a compositor hint. */
+  .flag-beat:not(.flag-beat--static) {
+    will-change: transform;
+  }
+
+  .flag-beat::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 100%;
+    bottom: 0;
+    width: 96px;
+    background-image: linear-gradient(
+      to left,
+      color-mix(in srgb, var(--alert) 22%, transparent),
+      transparent
+    );
+  }
+
+  /* prefers-reduced-motion: no travel; the rule states itself and fades. */
+  .flag-beat--static {
+    right: 0;
+    left: 0;
+    width: auto;
+    height: 1px;
+    top: 50%;
+    bottom: auto;
+  }
+
+  .flag-beat--static::before {
+    display: none;
+  }
+}

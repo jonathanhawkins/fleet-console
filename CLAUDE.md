@@ -1,0 +1,62 @@
+# Fleet Console
+
+A fleet-operations console for home humanoid robots: a design and engineering demo with a simulated fleet. An original, fictional product inspired by consumer home-robot design — **no company names and no third-party logos, renders, or assets anywhere in the repo or the shipped app.**
+
+**Read first:** `docs/prd/fleet-console-PRD.md` (the contract) and `docs/images/REFERENCES.md` (the visual targets, described in words).
+
+## The design thesis (governs everything)
+
+Two visual worlds; the transition between them is the whole demo:
+
+- **Operator space (light, default):** calm warm white, consumer-grade, thermostat energy. Geist Sans, small-caps wide-tracked labels, pill buttons, soft shadows, muted status colors. No neon. Ever.
+- **Machine space (dark, diagnostics):** what the robot itself reports. Phosphor green mono on near-black, JetBrains Mono, radius 0, no shadows, hierarchy by luminance. Evangelion diagnostic-board language. No rounded pills. Ever.
+
+The golden path (90 s, rock solid): fleet map → alert → click N-07 → telemetry drill-in → Run diagnostic → **descent** into machine space → scan walks subsystems with waveforms → verdict: LEFT KNEE ACTUATOR A-07, GAIN ANOMALY → recommendation → ascend, incident logged.
+
+## Non-negotiables
+
+1. All tokens are CSS variables on `[data-space="operator" | "machine"]`. No hardcoded colors in components.
+2. App code never imports shadcn directly — only `@/components/console` (wrapped, themed). The wrapper library is a first-class deliverable.
+3. Charts/waveforms are raw canvas driven by one shared rAF loop. Zero chart DOM nodes, no chart libraries.
+4. Telemetry is zod-validated at the transport, batched 10 Hz: one store commit per batch, one render per commit.
+5. Footer on every page: "A design and engineering demo. All data is simulated." No company naming anywhere — UI, README, docs, or repo description.
+6. All data simulated and labeled as such. The scripted incident must be re-runnable (sim reset).
+7. Budgets: fleet page initial JS < 200 KB gz; 60 fps during the descent; interaction < 100 ms. `prefers-reduced-motion` respected (descent → crossfade).
+8. Not the generic AI-SaaS look: no purple gradients, no glassmorphism, no emoji in UI, no stock-shadcn styling.
+9. Quality floor: strict TS, zero-warning lint, AA contrast in operator space, visible keyboard focus in both themes, responsive to tablet (768 px+).
+
+## Stack
+
+Next 15 (App Router, static-export capable) · React 19 · TS 5 strict · Tailwind 4 (token-driven) · shadcn/ui as primitives · framer-motion (descent + micro only) · zustand · zod · @tanstack/react-virtual · maplibre-gl · d3-scale (scales only) · three/R3F (component view route only) · vitest + RTL · playwright · pnpm.
+
+## Layout
+
+```
+/app                  routes: / (fleet), /unit/[id], /system (design-system gallery)
+/components/console   the component library (deliverable): StatusChip, UnitCard, AlertRail,
+                      TelemetryStrip, DescentOverlay, ScanLog, WaveformStrip, VerdictCard…
+/components/machine   machine-space internals (canvas-heavy, mono)
+/lib/transport        TelemetryTransport interface + WsTransport + WorkerTransport
+/lib/stores           zustand stores, batched reducers
+/lib/schema           zod message schemas (shared with sim)
+/sim                  simulator engine (ws server in dev, Web Worker in prod)
+```
+
+## Working in the tree
+
+- Comments explain intent, not history: no issue ids, no review references, no "why the alternative was rejected" essays.
+- Keep files under ~500 lines; split by responsibility before a file becomes a tour.
+- Every change keeps `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm e2e` green; CI runs all four plus the bundle budgets.
+
+## Commands
+
+```
+pnpm dev          # next dev
+pnpm sim          # dev ws sim server (after Phase 1)
+pnpm build        # must stay green — runs isolated from dev's .next (scripts/build-isolated.mjs), safe with dev up
+pnpm lint         # zero warnings
+pnpm test         # vitest
+```
+
+Parallel builds: builds auto-claim their own scratch workdir (4 warm slots, then a one-shot).
+`E2E_PORT_BASE=4290` moves e2e ports + artifacts under `.e2e-cohort/4290/` (budgets read `…/main`); `E2E_STRESS_PORT` likewise.

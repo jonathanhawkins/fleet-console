@@ -1,0 +1,92 @@
+/* Base: the shell column, focus, touch targets, and the three utilities. */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* The app shell column: header, page, footer. The footer is rendered once
+     by the root layout, so body holds it to the bottom of a short viewport. */
+  body {
+    display: flex;
+    min-height: 100dvh;
+    flex-direction: column;
+    background-color: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-space);
+    font-size: var(--fs-body);
+    line-height: var(--lh-body);
+    letter-spacing: var(--tr-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* The font switch is a property of the space, not of any component. */
+  [data-space] {
+    font-family: var(--font-space);
+  }
+
+  ::selection {
+    background-color: var(--selection);
+  }
+  [data-space="machine"] ::selection {
+    color: var(--bg);
+  }
+
+  * {
+    border-color: var(--line);
+  }
+}
+
+/* Visible keyboard focus in both worlds. Deliberately UNLAYERED: shadcn's
+   `outline-none` is a utility and beats @layer base. Longhands, so nothing
+   resets outline-color to currentColor. */
+:focus-visible {
+  outline-style: solid;
+  outline-width: 2px;
+  outline-color: var(--ring);
+  outline-offset: 2px;
+}
+
+[data-space="machine"] :focus-visible {
+  outline-width: 1px;
+  outline-offset: 3px;
+}
+
+/* Touch targets, coarse pointers only: pills grow to 44px; machine chips keep
+   their box and grow a transparent reach. Layered, so a positioned control wins. */
+@layer components {
+  @media (pointer: coarse) {
+    [data-console="button"] {
+      min-height: 44px;
+    }
+
+    [data-slot="machine-control"] {
+      position: relative;
+    }
+
+    [data-slot="machine-control"]::after {
+      content: "";
+      position: absolute;
+      inset: -10px;
+    }
+  }
+}
+
+/* Headings are sentence case in operator space and uppercase in machine
+   space; the type-step keys carry no text-transform, so it is its own utility. */
+@utility case-heading {
+  text-transform: var(--case-heading);
+}
+
+/* Fleet numbers line up in columns. */
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* A 1px rule: structure in machine space, a hairline in operator space. */
+@utility rule {
+  border: 0;
+  border-top: 1px solid var(--line);
+  width: 100%;
+}

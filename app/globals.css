@@ -1,0 +1,12 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Import order is cascade order: keep tokens → base → motion → operator →
+   machine → print. Tests read tokens.css and machine.css by path. */
+@import "./styles/tokens.css";
+@import "./styles/base.css";
+@import "./styles/motion.css";
+@import "./styles/operator.css";
+@import "./styles/machine.css";
+@import "./styles/print.css";

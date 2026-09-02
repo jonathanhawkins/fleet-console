@@ -1,0 +1,49 @@
+/* FORCED COLORS: elements whose whole existence is a background get a system
+   colour — structure in CanvasText, the flag beat in Highlight. Unlayered so
+   the component layer cannot out-cascade it. */
+@media (forced-colors: active) {
+  .diag-sweep::after {
+    background: CanvasText;
+  }
+
+  .descent-edge {
+    background: CanvasText;
+  }
+
+  .flag-beat {
+    background: Highlight;
+  }
+
+  .scan-handle::before {
+    background: CanvasText;
+  }
+}
+
+/* PRINT: the incident report only. Scoped to `[data-report="open"]`, written
+   on the root by report-page-lock.ts; the report is portalled to body so one
+   selector hides everything else. */
+@media print {
+  @page {
+    margin: 16mm;
+  }
+
+  html[data-report="open"] {
+    /* Paper has no scroll to lock; `hidden` would clip to one sheet. */
+    overflow: visible !important;
+  }
+
+  html[data-report="open"] body {
+    padding-right: 0 !important;
+    background: #fff;
+  }
+
+  html[data-report="open"] body > *:not([data-slot="incident-report"]) {
+    display: none !important;
+  }
+
+  html[data-report="open"] [data-slot="incident-report"] {
+    position: static !important;
+    overflow: visible !important;
+    background: #fff;
+  }
+}

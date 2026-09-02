@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+build
+coverage
+test-results
+playwright-report
+pnpm-lock.yaml
+next-env.d.ts
+# docs/ is the contract (PRD, references) — never reformat it
+docs
+CLAUDE.md
+public/map/fleet-light.json
+public/models/chassis-wireframe.json

@@ -229,11 +229,20 @@ test("phone: fleet → tap N-07 → descent → verdict sheet → return with in
   await expect.poll(offset, { timeout: 2000 }).toBe(0);
   await expect(sheet).toBeVisible();
 
-  // Now flick: short and fast, from a position that would settle on its own.
+  // Now flick: short and fast. The sheet reads velocity off the event
+  // timestamps over the last 60 ms, so each step's displacement is scaled to
+  // this machine's actual dispatch gap (a CI runner can take 40 ms per CDP
+  // round trip, a laptop 4 ms) — the finger always moves at ~1.8 px/ms, and
+  // the travel stays between 60 and 200 px.
   await touch("touchStart");
-  for (let i = 1; i <= 6; i++) {
-    await page.waitForTimeout(14);
-    await touch("touchMove", grabY + i * 18);
+  let flickY = grabY;
+  let lastAt = performance.now();
+  for (let i = 0; i < 5; i++) {
+    const now = performance.now();
+    const gapMs = i === 0 ? 8 : now - lastAt;
+    lastAt = now;
+    flickY += Math.min(40, Math.max(12, Math.round(1.8 * gapMs)));
+    await touch("touchMove", flickY);
   }
   await touch("touchEnd");
   await expect(sheet).toHaveCount(0);

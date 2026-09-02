@@ -60,6 +60,13 @@
       min-height: 44px;
     }
 
+    /* A pill carries its own width in its label; an icon-only control has no
+       label to be wide, so it needs the second axis asked for explicitly or a
+       32px glyph ships a 32px-wide target on a phone. */
+    [data-console="button"][data-icon-only] {
+      min-width: 44px;
+    }
+
     [data-slot="machine-control"] {
       position: relative;
     }

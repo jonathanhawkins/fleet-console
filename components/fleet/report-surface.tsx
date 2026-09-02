@@ -213,14 +213,36 @@ export function ReportLetterhead({
           <span className="text-ink-soft">Console</span>
         </span>
         {/* Hidden on paper: a printed page with a Close button on it is a
-            screenshot, not a document. */}
+            screenshot, not a document.
+
+            An icon, not a labelled capsule. This is a letterhead — the eye
+            should land on the title and the reference, and a filled pill in
+            the top corner competes with them for the only thing the masthead
+            is for. There is exactly one control on this surface, Escape does
+            the same job, and the words move to the accessible name, which is
+            where they are load-bearing rather than decorative. `data-icon-only`
+            buys the second axis of the 44px touch target (app/styles/base.css);
+            a glyph has no label to be wide with. */}
         <ConsoleButton
-          variant="secondary"
+          variant="ghost"
           size="sm"
+          data-icon-only
+          aria-label="Close incident report"
           onClick={onClose}
-          className="print:hidden"
+          className="w-8 shrink-0 px-0 print:hidden"
         >
-          Close
+          <svg
+            viewBox="0 0 16 16"
+            aria-hidden="true"
+            focusable="false"
+            className="h-3.5 w-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          >
+            <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" />
+          </svg>
         </ConsoleButton>
       </div>
 

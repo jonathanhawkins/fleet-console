@@ -584,7 +584,7 @@ describe("the document's frame", () => {
 
   it("keeps the console's own controls off the printed page", () => {
     renderReport();
-    expect(screen.getByRole("button", { name: "Close" }).className).toContain(
+    expect(screen.getByRole("button", { name: "Close incident report" }).className).toContain(
       "print:hidden",
     );
   });

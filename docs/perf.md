@@ -196,8 +196,7 @@ screen-reader choice documented in `components/console/unit-card.tsx`.
 
 ## Lighthouse history: desktop preset, local static serve, `/unit/N-07`
 
-Closes the audit's NPA-11 receipt gap: `/unit/[id]` prerenders as the *waiting
-state* and swaps the full instrument stack in on the worker's first snapshot —
+`/unit/[id]` prerenders as the *waiting state* and swaps the full instrument stack in on the worker's first snapshot —
 this run makes that swap's cost visible. Lighthouse 12.8.2 (same major as the
 `/` run above), fresh `pnpm build:static` served by `scripts/serve-static.mjs`.
 
@@ -232,7 +231,7 @@ wireframe, the resizable columns and the mobile pass all landed, lint clean, no
 
 | | Perf | A11y | BP | SEO | FCP | LCP | TBT | CLS | SI |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| desktop preset — before (NPA-11) | 82 | 100 | 100 | 100 | 0.3 s | 1.0 s | 370 ms | 0.06 | 0.3 s |
+| desktop preset — before | 82 | 100 | 100 | 100 | 0.3 s | 1.0 s | 370 ms | 0.06 | 0.3 s |
 | **desktop preset — after** | **99** | **100** | **100** | **100** | 0.3 s | 1.0 s | **40 ms** | **0.001** | 0.3 s |
 | mobile preset — as served locally | 76 | 100 | 100 | 100 | 1.2 s | 6.7 s | 90 ms | 0.002 | 1.2 s |
 | **mobile preset — served compressed** | **97** | **100** | **100** | **100** | 0.8 s | **2.6 s** | 90 ms | 0.002 | 0.8 s |

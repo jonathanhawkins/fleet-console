@@ -29,7 +29,7 @@ import {
 export default function FleetPage() {
   return (
     <>
-      {/* Map network head start (audit NPA-02). React 19 hoists these into
+      {/* Map network head start. React 19 hoists these into
           <head>, so the static export ships them in the prerendered HTML and
           the browser acts on them long before the maplibre chunk arrives:
           - preconnect: DNS + TCP + TLS to the tile origin overlap hydration

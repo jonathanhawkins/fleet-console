@@ -308,12 +308,12 @@ describe("DescentOverlay — leaving a running scan", { timeout: 60_000 }, () =>
 });
 
 /**
- * NPA-01: the occlusion signal's boundaries, asserted through the real stage
+ * The occlusion signal's boundaries, asserted through the real stage
  * with framer's animations running on jsdom's rAF. The fact itself is tested
  * in descent-occlusion.test.ts; these pin *when* the stage moves it — the one
  * thing that keeps "paused" meaning "invisible" and never "still visible".
  */
-describe("DescentOverlay — occlusion signal (NPA-01)", { timeout: 60_000 }, () => {
+describe("DescentOverlay — occlusion signal", { timeout: 60_000 }, () => {
   const REPORT: VerdictReport = {
     unitId: "N-07",
     joint: "knee_L",

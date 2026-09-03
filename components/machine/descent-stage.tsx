@@ -311,7 +311,7 @@ function DescentSurface({
   }, []);
 
   /**
-   * The occlusion signal's *clearing* edge (NPA-01). The moment the session
+   * The occlusion signal's *clearing* edge. The moment the session
    * ends, `active` flips false and the surface starts its "away" wipe — the
    * operator page begins showing beneath it that same frame, so everything
    * paused under the surface must already be live. The *setting* edge is the

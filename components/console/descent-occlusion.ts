@@ -1,6 +1,6 @@
 /**
  * Whether the descent surface is currently opaque over the operator page —
- * the app's one occlusion fact, as a module-level signal (NPA-01).
+ * the app's one occlusion fact, as a module-level signal.
  *
  * While a scan runs, the unit page underneath the descent stage is 100 %
  * covered, yet nothing that draws it knows: the eighteen telemetry strips keep

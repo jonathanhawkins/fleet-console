@@ -584,7 +584,7 @@ describe("TelemetryStrip", () => {
     expect(ctx.calls.clearRect).toBe(1);
 
     // The surface lands. The rings keep advancing — telemetry never stops
-    // during a scan — but not one hidden pixel may be painted (NPA-01).
+    // during a scan — but not one hidden pixel may be painted.
     setDescentOccluded(true);
     push(5);
     frame();

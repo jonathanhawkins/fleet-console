@@ -7,7 +7,7 @@ import {
 } from "./descent-occlusion";
 
 /**
- * The occlusion signal's contract (NPA-01). The *when* — wipe-complete sets
+ * The occlusion signal's contract. The *when* — wipe-complete sets
  * it, ascend-start clears it, in both timelines — is wired in
  * descent-stage.tsx and asserted through the overlay in
  * descent-overlay.test.tsx; what belongs here is the signal itself: a module

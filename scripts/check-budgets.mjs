@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 
 /**
- * Bundle-budget guard (audit NPA-03). Zero-dep, CI-shaped.
+ * Bundle-budget guard. Zero-dep, CI-shaped.
  *
  * The console barrel + single CSS chunk deliberately concentrate growth into
  * every route's shared initial payload — the exact mechanism by which classic

@@ -97,3 +97,35 @@
   border-top: 1px solid var(--line);
   width: 100%;
 }
+
+/* Scrollbars belong to the space they scroll in. Thin, a hairline-strong
+   thumb on a transparent track, no arrows; the radius token makes it a pill
+   in operator space and a bar in machine space. The Firefox properties and the
+   WebKit pseudo-elements are the same two decisions written twice. */
+@layer base {
+  [data-space] {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+  [data-space] *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  [data-space] *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  [data-space] *::-webkit-scrollbar-thumb {
+    background-color: var(--line-strong);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: var(--r-pill);
+  }
+  [data-space] *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted);
+  }
+  [data-space] *::-webkit-scrollbar-corner,
+  [data-space] *::-webkit-scrollbar-button {
+    background: transparent;
+    display: none;
+  }
+}

@@ -344,6 +344,77 @@ export function segmentsBoxCenter(
   return true;
 }
 
+/**
+ * Where on its node a joint's leader line lands.
+ *
+ * A knee is its own module, so its box centre is the joint. A hip or an ankle
+ * shares the leg node with the whole limb, and the middle of a shin is not an
+ * ankle: the line lands in the band of the limb where the joint actually is —
+ * the top of the leg for a hip, just above the foot for an ankle.
+ */
+export type AnchorSite = "center" | "top" | "bottom";
+
+export function anchorSiteForJoint(joint: string | null | undefined): AnchorSite {
+  if (!joint) return "center";
+  if (joint.startsWith("ankle")) return "bottom";
+  if (joint.startsWith("hip")) return "top";
+  return "center";
+}
+
+/**
+ * The joint bands as fractions of the node's projected height, measured from
+ * the limb's end. A hip is at the very top of its leg; an ankle sits above the
+ * foot, so its band starts a tenth of the way up.
+ */
+const SITE_BAND = {
+  top: { near: 0, far: 0.14 },
+  bottom: { near: 0.1, far: 0.24 },
+} as const;
+
+/**
+ * The leader line's anchor for one node's segments, written into `out`:
+ * the box centre for a module, or the centre of the joint band for a limb.
+ * Falls back to the box centre when the band holds no endpoint.
+ */
+export function segmentsAnchor(
+  seg: Float32Array | undefined,
+  out: { x: number; y: number },
+  site: AnchorSite,
+): boolean {
+  if (!segmentsBoxCenter(seg, out) || !seg) return false;
+  if (site === "center") return true;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 1; i < seg.length; i += 2) {
+    const y = seg[i] ?? 0;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  const h = maxY - minY;
+  if (h <= 0) return true;
+  // Canvas y grows downward: "bottom" is the largest y.
+  const band = SITE_BAND[site];
+  const lo = site === "bottom" ? maxY - band.far * h : minY + band.near * h;
+  const hi = site === "bottom" ? maxY - band.near * h : minY + band.far * h;
+  let bMinX = Infinity;
+  let bMaxX = -Infinity;
+  let bMinY = Infinity;
+  let bMaxY = -Infinity;
+  for (let i = 0; i < seg.length; i += 2) {
+    const y = seg[i + 1] ?? 0;
+    if (y < lo || y > hi) continue;
+    const x = seg[i] ?? 0;
+    if (x < bMinX) bMinX = x;
+    if (x > bMaxX) bMaxX = x;
+    if (y < bMinY) bMinY = y;
+    if (y > bMaxY) bMaxY = y;
+  }
+  if (bMinX === Infinity) return true;
+  out.x = (bMinX + bMaxX) / 2;
+  out.y = (bMinY + bMaxY) / 2;
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // The component
 // ---------------------------------------------------------------------------
@@ -468,6 +539,8 @@ export function WireframeElevation({
   );
   const flagRef = React.useRef(flagIndex);
   flagRef.current = flagIndex;
+  const siteRef = React.useRef(anchorSiteForJoint(damagedJoint));
+  siteRef.current = anchorSiteForJoint(damagedJoint);
   // Read per frame, like the flag itself: the loop holds no props, and a tone
   // that arrives twenty seconds after mount must reach the next frame without
   // tearing the subscription down.
@@ -611,7 +684,7 @@ export function WireframeElevation({
       if (
         flagged >= 0 &&
         rt.fig &&
-        segmentsBoxCenter(rt.fig.xy[flagged], anchor.current)
+        segmentsAnchor(rt.fig.xy[flagged], anchor.current, siteRef.current)
       ) {
         const { x, y } = anchor.current;
         const last = reported.current;

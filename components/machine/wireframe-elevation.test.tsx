@@ -13,6 +13,8 @@ import {
   nodeIndexForJoint,
   nodeNameForJoint,
   resetWireframeCacheForTests,
+  anchorSiteForJoint,
+  segmentsAnchor,
   segmentsBoxCenter,
   WireframeElevation,
   WIREFRAME_URL,
@@ -270,6 +272,56 @@ describe("nodeIndexForJoint", () => {
     expect(nodeIndexForJoint(null, "knee_L")).toBe(-1);
     expect(nodeIndexForJoint(MODEL, null)).toBe(-1);
     expect(nodeIndexForJoint(MODEL, "torso_yaw")).toBe(-1);
+  });
+});
+
+describe("segmentsAnchor", () => {
+  // A limb: one long vertical quad from y=0 (hip) to y=100 (foot) with a
+  // narrow foot at the bottom and a wide hip at the top.
+  const limb = Float32Array.from([
+    5,
+    0,
+    5,
+    100, // the shin, top to bottom
+    0,
+    2,
+    10,
+    2, // the hip rim, wide
+    3,
+    85,
+    7,
+    85, // the ankle rim
+    2,
+    98,
+    8,
+    98, // the foot
+  ]);
+
+  it("lands an ankle in the band just above the foot, not mid-shin", () => {
+    const out = { x: 0, y: 0 };
+    expect(segmentsAnchor(limb, out, "bottom")).toBe(true);
+    expect(out.y).toBeGreaterThan(75);
+    expect(out.y).toBeLessThan(91);
+    expect(out.x).toBe(5);
+  });
+
+  it("lands a hip at the top of the leg", () => {
+    const out = { x: 0, y: 0 };
+    expect(segmentsAnchor(limb, out, "top")).toBe(true);
+    expect(out.y).toBeLessThan(25);
+  });
+
+  it("is the box centre for a module", () => {
+    const out = { x: 0, y: 0 };
+    expect(segmentsAnchor(limb, out, "center")).toBe(true);
+    expect(out.y).toBe(50);
+  });
+
+  it("resolves the site from the joint name", () => {
+    expect(anchorSiteForJoint("ankle_R")).toBe("bottom");
+    expect(anchorSiteForJoint("hip_L")).toBe("top");
+    expect(anchorSiteForJoint("knee_L")).toBe("center");
+    expect(anchorSiteForJoint(null)).toBe("center");
   });
 });
 

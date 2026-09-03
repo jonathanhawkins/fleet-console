@@ -328,30 +328,58 @@ export interface ReportMoment {
 /**
  * The clock a report runs on: every moment it can honestly date, in the order
  * the incident is told rather than the order the fields are stored in.
+ *
+ * ## It is drawn as a rail, not as a band of columns
+ *
+ * Six labelled times side by side are a *sequence*, and set as six equal
+ * columns they read as six unrelated fields — the eye has nothing to travel
+ * along and no way to tell the order was meant. So each cell rules its own top
+ * edge and drops a tick under the label: the cells butt (the column gutter is
+ * padding inside them, never a grid gap), the rules meet, and what an operator
+ * sees is one ruled line with the incident's beats stood on it.
+ *
+ * Three across, at most. Six columns of 11px wide-tracked capitals cannot hold
+ * "Acknowledged" or "Rollback ordered" on one line at this measure, and a rail
+ * whose labels wrap at different heights is a rail with a kink in it. Three
+ * rows the sequence 3 + 3, which is also how both documents' beats actually
+ * group — the alert's life, then the response's.
+ *
+ * The rules and ticks are borders rather than filled boxes because this
+ * document prints, and a browser drops background colour on paper by default.
+ *
+ * A moment no journal recorded gets no tick: the rail runs on past a beat that
+ * did not happen, which is the honest picture and costs no extra ink.
  */
 export function ReportMoments({ moments }: { moments: readonly ReportMoment[] }) {
   return (
-    <dl
-      className={cn(
-        "grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3",
-        moments.length > 4 ? "md:grid-cols-6" : "md:grid-cols-4",
-      )}
-    >
+    <dl className="grid grid-cols-2 gap-y-6 sm:grid-cols-3">
       {moments.map(({ key, label, ts }) => (
-        <div key={key} data-moment={key} className="flex flex-col gap-0.5">
-          {/* Two label lines' worth, always. "Diagnostic started" is the one
-              caption long enough to wrap in a six-column row, and without a
-              floor under all six its neighbours' times sit a line higher than
-              its own — six clocks on two baselines, which is the one thing a
-              row of times must not be. */}
-          <dt className="flex min-h-[31px] items-end">
+        <div
+          key={key}
+          data-moment={key}
+          data-recorded={ts === undefined ? undefined : ""}
+          className="flex min-w-0 flex-col"
+        >
+          {/* Two label lines' worth, always, bottom-aligned. Below the widest
+              breakpoint the longest caption takes two lines and its neighbour
+              takes one; without a floor under both, their rules — and so the
+              rail itself — sit at two different heights. */}
+          <dt className="flex min-h-[31px] items-end pr-6 pb-2">
             <SectionLabel as="span">{label}</SectionLabel>
           </dt>
-          <dd className="tnum text-small text-ink">
+          <dd className="tnum relative border-t border-line pt-2 pr-6 text-small text-ink-soft">
             {ts === undefined ? (
               <NotRecorded />
             ) : (
-              <time dateTime={isoTime(ts)}>{clockTime(ts)}</time>
+              <>
+                <span
+                  aria-hidden
+                  className="absolute top-0 left-0 h-1.5 border-l border-line"
+                />
+                <time dateTime={isoTime(ts)} className="text-ink">
+                  {clockTime(ts)}
+                </time>
+              </>
             )}
           </dd>
         </div>
@@ -433,6 +461,20 @@ export function ReportFigure({
  * makes the argument). It was written out three times, identically, in two
  * files; a house style repeated by hand is a house style waiting to drift, and
  * this file exists to stop exactly that.
+ *
+ * ## The machine keeps its typeface
+ *
+ * Everything else on this page is Geist, because everything else on this page
+ * is the console talking. A quotation is not, and the cheapest true way to say
+ * so is the one a document already has: set it in the other voice's face. The
+ * mono is the machine's own (`--font-mono`, the same family the descent runs
+ * in), on the page's warm white, in the page's ink — a transcript in daylight
+ * rather than a screenshot of a terminal. No ground, no box, no phosphor: that
+ * would be machine space leaking into a document that is not in it.
+ *
+ * The attribution goes the other way, into the document's own label register,
+ * so the two lines cannot be confused for each other: small caps say "this is
+ * the console telling you where that sentence came from".
  */
 export function ReportQuote({
   caption,
@@ -446,10 +488,10 @@ export function ReportQuote({
 }) {
   return (
     <figure className={cn("border-l-2 border-line pl-4", className)}>
-      {children}
-      <figcaption className="mt-1 text-label tracking-normal text-ink-soft">
+      <div className="font-mono leading-[1.55] text-ink">{children}</div>
+      <SectionLabel as="figcaption" className="mt-2.5">
         {caption}
-      </figcaption>
+      </SectionLabel>
     </figure>
   );
 }
@@ -468,7 +510,9 @@ export function ReportQuote({
  *
  * Both keep a floor and a scroller under them: below the floor the columns stop
  * crushing and the table scrolls inside its own box rather than pushing the
- * document sideways.
+ * document sideways. Paper has no scroller, so the clip comes off for print —
+ * a sheet that silently cut a column off at its edge would be the one failure
+ * a printed table cannot recover from.
  */
 const TABLE_MEASURE = {
   compare: "min-w-[20rem] max-w-[32rem]",
@@ -485,7 +529,7 @@ export function ReportTable({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn("overflow-x-auto", className)}>
+    <div className={cn("overflow-x-auto print:overflow-visible", className)}>
       <table className={cn("w-full border-collapse text-small", TABLE_MEASURE[measure])}>
         {children}
       </table>

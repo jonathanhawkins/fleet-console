@@ -45,7 +45,7 @@ export interface SectionLabelProps
   /** Run a hairline from the end of the label to the edge of its container. */
   rule?: boolean;
   /** Render as a different element — `h2` for real section headings. */
-  as?: "div" | "p" | "span" | "h2" | "h3";
+  as?: "div" | "p" | "span" | "h2" | "h3" | "figcaption";
 }
 
 export function SectionLabel({

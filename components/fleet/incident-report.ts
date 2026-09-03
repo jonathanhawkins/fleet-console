@@ -15,7 +15,7 @@ import { type AlertMeta, type AuditEntry, type IncidentRecord } from "@/lib/stor
  * the report needs that no store keeps — which document is open.
  *
  * Everything here is deliberately free of JSX so the surface can be code-split
- * (incident-report-surface.tsx) while the part the *unit page* needs — the
+ * (incident-report-surface/) while the part the *unit page* needs — the
  * open signal — stays small enough to sit in its initial JS.
  */
 

@@ -86,7 +86,7 @@ export const ANOMALY_DIFFERENTIALS: Readonly<Record<string, readonly string[]>> 
   // trace with its envelope intact is most often a reference the joint has
   // lost, and the two mechanical candidates behind it are what a re-zero that
   // does not hold would leave. The operator page prints its own translation of
-  // the same three (incident-report-surface.tsx); this one stays terse.
+  // the same three (incident-report-surface/); this one stays terse.
   offset: ["ENCODER ZERO DRIFT", "MOUNT SHIFT", "LINKAGE BACKLASH"],
 };
 

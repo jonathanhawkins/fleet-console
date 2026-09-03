@@ -16,7 +16,7 @@ import {
  * What a report *is*, apart from what any one report says.
  *
  * There are two of them now — the unit's write-up
- * (incident-report-surface.tsx) and the fleet's (cohort-report-surface.tsx) —
+ * (incident-report-surface/) and the fleet's (cohort-report-surface/) —
  * and the thing an operator recognises when the second one opens is not its
  * content, it is its shape: full width, one column of reading, a letterhead
  * with a reference on it, sections ruled and labelled the same way, and a
@@ -24,7 +24,7 @@ import {
  * style that lives in two files is a house style with a drift in it.
  *
  * So the chrome is extracted whole rather than approximated: the modal surface
- * and its focus discipline, the letterhead, the section rule, the row of
+ * and its focus discipline, the letterhead, the section rule, the rail of
  * moments, the derived figure and the colophon. Everything a *particular*
  * report knows — which journals it joins, what it is allowed to conclude — stays
  * in that report's own file. This one holds nothing about incidents at all.
@@ -373,8 +373,9 @@ export function ReportMoments({ moments }: { moments: readonly ReportMoment[] })
             ) : (
               <>
                 <span
+                  data-tick
                   aria-hidden
-                  className="absolute top-0 left-0 h-1.5 border-l border-line"
+                  className="absolute top-0 left-0 h-2 border-l border-line-strong"
                 />
                 <time dateTime={isoTime(ts)} className="text-ink">
                   {clockTime(ts)}
@@ -457,8 +458,8 @@ export function ReportFigure({
  * Both documents do this and it is the house rule they share most explicitly:
  * operator space *translates* the machine's voice everywhere else, and a report
  * *cites* — so the wire's own sentence appears verbatim, ruled off, with its
- * attribution beneath (the long note at the head of incident-report-surface.tsx
- * makes the argument). It was written out three times, identically, in two
+ * attribution beneath (the long note at the head of
+ * incident-report-surface/surface.tsx makes the argument). It was written out three times, identically, in two
  * files; a house style repeated by hand is a house style waiting to drift, and
  * this file exists to stop exactly that.
  *

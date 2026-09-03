@@ -18,6 +18,7 @@ import {
   confirmedSignal,
   executedCommands,
   IncidentReportSurface,
+  verdictSubline,
 } from "./incident-report-surface";
 
 /**
@@ -260,19 +261,66 @@ describe("the times", () => {
     expect(figure("Time to resolve")).toContain("1h 33m");
     expect(figure("Time to resolve")).toContain("MTTR");
   });
+
+  /**
+   * A band where only some figures are glossed reads as two kinds of number.
+   * Every span names the two moments it runs between — which is also the line
+   * that ties the band back to the rail above it.
+   */
+  it("says which two moments every figure runs between", () => {
+    const { container } = renderReport();
+    const figure = (label: string) =>
+      container.querySelector(`[data-figure='${label}']`)?.textContent ?? "";
+    expect(figure("Time to acknowledge")).toContain("raised → acknowledged");
+    expect(figure("Time to diagnose")).toContain("raised → diagnostic");
+    expect(figure("Diagnosis to close")).toContain("diagnostic → resolved");
+    expect(figure("Time to resolve")).toContain("raised → resolved");
+  });
+
+  /**
+   * The rail is what makes six times read as a sequence rather than as six
+   * fields, and a beat no journal recorded gets no tick on it — the line runs
+   * past it, which is the honest picture.
+   */
+  it("stands the beats on a rail, and marks only the ones that happened", () => {
+    useFleetStore.setState({ alertMeta: {} });
+    useAuditStore.getState().reset();
+    const { container } = renderReport();
+    const cell = (key: string) =>
+      container.querySelector(`[data-moment='${key}']`) as HTMLElement;
+
+    expect(cell("verdict")).toHaveAttribute("data-recorded");
+    expect(cell("acked")).not.toHaveAttribute("data-recorded");
+    // Borders, not filled boxes: a browser drops background colour on paper.
+    expect(cell("verdict").querySelector("dd")?.className).toContain("border-t");
+    expect(cell("verdict").querySelector("[data-tick]")).toBeInTheDocument();
+    expect(cell("acked").querySelector("[data-tick]")).toBeNull();
+  });
 });
 
 describe("the verdict", () => {
-  it("leads in the page's own voice and quotes the instrument underneath it", () => {
+  it("leads in the page's own voice", () => {
     renderReport();
     expect(
       screen.getByText("Left knee actuator A-07: gain anomaly."),
     ).toBeInTheDocument();
-    // Verbatim, attributed — a report cites where a banner translates.
+  });
+
+  /**
+   * The headline is built from the joint and the part, so printing them again
+   * underneath it was a stutter rather than a second index. The line says only
+   * what the headline has not already said — here, nothing.
+   */
+  it("does not repeat under the headline what the headline already says", () => {
+    renderReport();
+    expect(screen.queryByText("Left knee · Left knee actuator")).toBeNull();
     expect(
-      screen.getByText("LIVE TRACE 1.4-1.8x REFERENCE ENVELOPE"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Recorded by the diagnostic scan")).toBeInTheDocument();
+      verdictSubline("Left knee actuator A-07: gain anomaly.", report, "knee_actuator_L"),
+    ).toBeNull();
+    // A headline that named neither vocabulary would print both.
+    expect(verdictSubline("Gain anomaly.", report, "knee_actuator_L")).toBe(
+      "Left knee · Left knee actuator",
+    );
   });
 
   it("tables every channel the scan measured, and marks the subject", () => {
@@ -280,8 +328,24 @@ describe("the verdict", () => {
     const subject = container.querySelector("[data-channel='knee_L']");
     expect(subject).toHaveTextContent("Left knee");
     expect(subject).toHaveTextContent("1.78×");
-    expect(within(subject as HTMLElement).getByText("subject")).toBeInTheDocument();
+    expect(subject).toHaveAttribute("data-subject");
     expect(container.querySelectorAll("[data-channel]")).toHaveLength(3);
+  });
+
+  /**
+   * Clay is spent on the readings, which are what is out of envelope. The row
+   * itself is found by weight and by a label in the document's own register: a
+   * red word beside a joint's name reads as "this row errored", which is a
+   * different claim and not the one the scan made.
+   */
+  it("marks the subject row without colouring it like an error", () => {
+    const { container } = renderReport();
+    const subject = container.querySelector("[data-channel='knee_L']") as HTMLElement;
+    const tag = within(subject).getByText("Subject");
+    expect(tag).toHaveAttribute("data-slot", "section-label");
+    expect(tag.className).not.toContain("alert");
+    // The measurements keep the tone.
+    expect(subject.querySelector("td")?.className).toContain("text-alert-ink");
   });
 
   /**
@@ -369,6 +433,42 @@ describe("confirmedSignal", () => {
 });
 
 describe("the evidence", () => {
+  /**
+   * Verbatim, attributed, and set where both halves of the recorded sentence
+   * do work: over the traces, whose subject the first half names and whose
+   * reading the second half states. Under the headline the first half was an
+   * echo of it.
+   */
+  it("cites the instrument in the instrument's own typeface, over the traces", () => {
+    const { container } = renderReport();
+    const quote = screen.getByText("LIVE TRACE 1.4-1.8x REFERENCE ENVELOPE");
+    expect(quote.tagName).toBe("BLOCKQUOTE");
+    expect(quote.parentElement?.className).toContain("font-mono");
+    expect(screen.getByText("Recorded by the diagnostic scan")).toHaveAttribute(
+      "data-slot",
+      "section-label",
+    );
+
+    const sections = [...container.querySelectorAll("section")];
+    const evidence = sections.find((s) => s.textContent?.startsWith("Evidence"));
+    expect(evidence).toContainElement(quote);
+    expect(evidence?.querySelector("[data-evidence='knee_L']")).toBeInTheDocument();
+  });
+
+  /** A scan whose channels were never archived still has its own sentence. */
+  it("still cites the scan when no trace was filed", () => {
+    render(
+      <IncidentReportSurface
+        record={{ id: record.id, unitId: record.unitId, report, acknowledged: [] }}
+        onClose={onClose}
+      />,
+    );
+    expect(
+      screen.getByText("LIVE TRACE 1.4-1.8x REFERENCE ENVELOPE"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Recorded by the diagnostic scan")).toBeInTheDocument();
+  });
+
   it("shows the failing joint against its opposite number", () => {
     const { container } = renderReport();
     const subject = container.querySelector("[data-evidence='knee_L']");
@@ -422,9 +522,12 @@ describe("the recalibration, once the cheap rung has been tried", () => {
   });
 
   it("says nothing about a calibration on an incident where none was run", () => {
-    renderReport();
+    const { container } = renderReport();
     expect(screen.queryByText(/unloaded recalibration was run/i)).toBeNull();
-    expect(screen.queryByText(/→/)).toBeNull();
+    // No before/after anywhere on the exhibit: one reading, not two.
+    const subject = container.querySelector("[data-evidence='knee_L']") as HTMLElement;
+    expect(subject.textContent).not.toMatch(/→/);
+    expect(subject.querySelector("[data-role='pre']")).toBeNull();
   });
 });
 
@@ -482,6 +585,54 @@ describe("the actions", () => {
     expect(row).toHaveTextContent("Safe sit");
     expect(row).toHaveTextContent(`complete ${clockTime(VERDICT_TS + 2_600)}`);
     expect(row).toHaveTextContent("remote operations");
+  });
+
+  /**
+   * The sim draws a fresh seq for every beat it sends — the command store
+   * treats seq as the ordering authority — so an accept and its completion
+   * never share a ref, and a fold keyed on the ref folded nothing.
+   */
+  it("folds an accept and its completion even when they carry different refs", () => {
+    useAuditStore.getState().append({
+      ts: VERDICT_TS + 2_000,
+      kind: "command-accepted",
+      unitId: "N-07",
+      summary: "RECALIBRATE JOINT accepted",
+      ref: "RECALIBRATE_JOINT#4",
+    });
+    useAuditStore.getState().append({
+      ts: VERDICT_TS + 2_600,
+      kind: "command-complete",
+      unitId: "N-07",
+      summary: "RECALIBRATE JOINT complete",
+      ref: "RECALIBRATE_JOINT#9",
+    });
+
+    const { container } = renderReport();
+    const rows = container.querySelectorAll("[data-command]");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent(`complete ${clockTime(VERDICT_TS + 2_600)}`);
+  });
+
+  /**
+   * A press that also sent a command is one action. Listing it again under a
+   * heading whose own footnote says no command was sent would be the page
+   * contradicting itself about the row directly above.
+   */
+  it("does not list an executed command a second time as an acknowledgement", () => {
+    useAuditStore.getState().append({
+      ts: VERDICT_TS + 2_000,
+      kind: "command-accepted",
+      unitId: "N-07",
+      summary: "RECALIBRATE JOINT accepted",
+      ref: "RECALIBRATE_JOINT#4",
+    });
+
+    const { container } = renderRecalibratedReport();
+    expect(container.querySelector("[data-command='RECALIBRATE_JOINT#4']")).toBeInTheDocument();
+    expect(container.querySelector("[data-action='Recalibrate joint']")).toBeNull();
+    // The press that sent nothing is still on the page.
+    expect(container.querySelector("[data-action='Dispatch service']")).toBeInTheDocument();
   });
 
   it("says nothing happened, where nothing happened", () => {

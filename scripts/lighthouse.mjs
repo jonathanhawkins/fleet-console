@@ -10,7 +10,8 @@ import { launch } from "chrome-launcher";
  *
  * Serves the static export the way the deploy target does (compressed text,
  * `scripts/serve-static.mjs --gzip`), runs the desktop preset against the two
- * routes the budget script already guards, writes each full report to
+ * product routes the budget script already guards plus the design-system
+ * gallery (the only route that renders machine space), writes each full report to
  * `docs/evidence/lighthouse/<route>.json` (the median-performance run of three;
  * one on CI, or `LH_RUNS`), prints the four category scores,
  * and exits 1 when any score is below the bar:
@@ -41,9 +42,17 @@ const OUT = resolve(process.argv[2] ?? "out");
 const PORT = Number.parseInt(process.env.LH_PORT ?? "4180", 10);
 const EVIDENCE = join(ROOT, "docs", "evidence", "lighthouse");
 
+/**
+ * `/system` is here for the half of the design thesis the other two routes
+ * cannot reach: it renders both spaces on one page, so machine space gets its
+ * contrast and focus audited on every run rather than never. Performance on it
+ * is not meaningful (it is a specimen sheet, not a product surface), which the
+ * per-route bar below accounts for.
+ */
 const ROUTES = [
   { route: "/", file: "index.json" },
   { route: "/unit/N-01", file: "unit-N-01.json" },
+  { route: "/system", file: "system.json", report: ["performance"] },
 ];
 
 /**
@@ -141,7 +150,7 @@ try {
   // median-performance run is the one kept and gated. CI reports a single run.
   const RUNS = Number.parseInt(process.env.LH_RUNS ?? "", 10) || (process.env.CI ? 1 : 3);
 
-  for (const { route, file } of ROUTES) {
+  for (const { route, file, report = [] } of ROUTES) {
     const runs = [];
     for (let i = 0; i < RUNS; i += 1) {
       const result = await lighthouse(
@@ -168,8 +177,11 @@ try {
     writeFileSync(join(EVIDENCE, file), JSON.stringify(lhr, null, 2) + "\n");
 
     const scores = Object.fromEntries(Object.keys(BAR).map((id) => [id, score(lhr, id)]));
+    // A category is gated unless this environment reports it (performance on
+    // CI) or this route does (performance on the specimen sheet).
+    const reported = (id) => GATED_LOCALLY_ONLY.has(id) || report.includes(id);
     const pass = Object.entries(BAR).every(
-      ([id, bar]) => GATED_LOCALLY_ONLY.has(id) || scores[id] >= bar,
+      ([id, bar]) => reported(id) || scores[id] >= bar,
     );
     if (!pass) failed = true;
     rows.push({

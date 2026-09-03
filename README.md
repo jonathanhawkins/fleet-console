@@ -56,21 +56,24 @@ both.
 
 ```mermaid
 flowchart TD
-  E["sim/engine.ts<br/>pure · seeded · injectable clock"]
+  E["sim/engine/<br/>pure · seeded · injectable clock"]
   S["sim/server.ts<br/>ws host (dev)"]
   H["sim/worker-host.ts<br/>Web Worker host (deploy)"]
   T["TelemetryTransport<br/>connect · send · disconnect"]
   Z["zod boundary + ordering gate"]
-  F["fleetStore<br/>one commit per 10 Hz batch"]
-  R["Float64Array rings<br/>outside React"]
+  P["telemetryChannel<br/>rings + per-unit versions, outside React"]
   L["one shared rAF loop"]
   N["canvas instruments<br/>zero chart DOM nodes"]
+  F["fleetStore<br/>status · alerts · incidents"]
   C["React tree<br/>narrow selectors"]
 
   E --> S --> T
   E --> H --> T
-  T --> Z --> F
-  F --> R --> L --> N
+  T --> Z
+  Z -- telemetry --> P
+  Z -- "status · alerts · commands" --> F
+  P --> L --> N
+  P -. "useSyncExternalStore per unit" .-> C
   F --> C
   C -. "send(OperatorCommand)" .-> T
 ```
@@ -79,9 +82,11 @@ flowchart TD
   a `ws` server in development; `WorkerTransport` runs the identical engine in
   a Web Worker for the static deploy. A test pins the two streams
   byte-identical, which is what lets Playwright test the artifact that ships.
-- **10 Hz costs one commit and one render.** Samples land in ring buffers
-  React does not own; the store bumps one version per batch; canvas hosts
-  read the rings in the frame loop and skip the draw when nothing arrived.
+- **10 Hz of telemetry costs the store nothing.** Samples never enter
+  reactive state: they land in `Float64Array` rings beside a per-unit version
+  counter, and only that unit's subscribers are notified. Canvas hosts read the
+  rings in the frame loop and skip the draw when nothing arrived. The store
+  commits when a fact an operator reads changes, not when a sample does.
 - **Delivery is treated as hostile at the boundary that already validates.**
   Stale telemetry is dropped whole, command events order by an engine
   sequence, and a snapshot resets every gate.
@@ -173,11 +178,27 @@ projects against it — the golden path, leave-and-return, the firmware cohort,
 the phone at 390 px, and reduced motion at both viewports — then checks the
 bundle budgets. CI runs lint, typecheck, unit, e2e and budgets on every push.
 
+## What this demo is not
+
+Worth saying plainly, because each of these is a decision rather than an
+oversight:
+
+- **One operator, no identity.** Actions are attributed to "Operator" and the
+  audit trail has no actor field. A real deployment needs authentication,
+  per-user attribution, and a handover between shifts, because the audit
+  trail's whole value is who did what.
+- **Nothing is durable.** Every store is in memory, so a reload loses the
+  incident record and the acknowledgements. The incident report exists to be
+  printed and handed on; behind it a real console needs a server that keeps it.
+- **No fleet-scale write path.** Commands go to one unit at a time, except the
+  firmware rollout, which is deliberately the exception that shows why
+  fleet-scoped commands need their own confirmation and their own audit.
+
 ## Run it
 
 ```bash
 pnpm install
-pnpm sim      # ws simulator on :8787
+pnpm sim      # ws simulator on :8791
 pnpm dev      # http://localhost:3000
 ```
 

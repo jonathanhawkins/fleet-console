@@ -59,12 +59,12 @@ describe("UnitCard posture", () => {
     // everything the row shows; a fact added to the row and forgotten here is a
     // fact a screen reader loses.
     expect(screen.getByRole("link")).toHaveAccessibleName(
-      "N-07, Sagebrush House. Alert. Safe sit. Battery 84 percent. Last contact just now.",
+      "N-07, Sagebrush House. Alert. Safe sit. Battery 84%. Last contact just now.",
     );
 
     rerender(row("walking"));
     expect(screen.getByRole("link")).toHaveAccessibleName(
-      "N-07, Sagebrush House. Alert. Battery 84 percent. Last contact just now.",
+      "N-07, Sagebrush House. Alert. Battery 84%. Last contact just now.",
     );
   });
 });

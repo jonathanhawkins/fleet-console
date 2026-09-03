@@ -127,7 +127,11 @@ export function UnitCard({
         `${unitId}, ${name}.`,
         `${unitStatusCopy(status)}.`,
         postureLabel(posture) ? `${postureLabel(posture)}.` : null,
-        `Battery ${Math.round(battery)} percent.`,
+        // "%" rather than "percent": the visible row says "93%", and an
+        // accessible name that replaces the content has to contain it or voice
+        // control cannot address the row. Every current screen reader speaks
+        // "%" as "percent", so nothing is lost by matching the glyph.
+        `Battery ${Math.round(battery)}%.`,
         recency ? `Last contact ${recency}.` : null,
         fw ? `Firmware ${fw}.` : null,
         // Last, matching the reading order: the watch is the row's third line

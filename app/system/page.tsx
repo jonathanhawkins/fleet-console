@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import {
   ConsoleButton,
   ConsoleCard,
@@ -7,6 +8,8 @@ import {
   StatusChip,
 } from "@/components/console";
 import { FLEET_UNITS } from "@/sim/engine";
+import { SpecimenEntry } from "./library";
+import { SPECIMENS } from "./specimens";
 import { TokenSwatch, TypeSpecimen } from "./token-readout";
 
 export const metadata: Metadata = {
@@ -56,7 +59,7 @@ function Group({
       {/* deliberately not sticky: the rail label must sit level with the first
           line of its content, which is the whole gesture being borrowed */}
       <div className="flex flex-col gap-2 self-start">
-        <SectionLabel as="h2" tone="ink">
+        <SectionLabel as="h3" tone="ink">
           {label}
         </SectionLabel>
         {note ? (
@@ -89,9 +92,11 @@ function SpaceHeader({
     <header className="grid gap-6 pb-14 md:grid-cols-[200px_1fr] md:gap-16 machine:pb-10">
       <SectionLabel className="self-start">{label}</SectionLabel>
       <div className="flex flex-col gap-5">
-        <h1 className="max-w-[24ch] text-display text-balance text-ink case-heading">
+        {/* An h2: the page's one h1 is its masthead. Heading level and type
+            scale are independent, so this keeps the display size. */}
+        <h2 className="max-w-[24ch] text-display text-balance text-ink case-heading">
           {headline}
-        </h1>
+        </h2>
         <p className="max-w-[34rem] text-body text-ink-soft">{blurb}</p>
         <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-label text-ink-soft machine:text-ink-muted">
           {meta.map((m, i) => (
@@ -234,7 +239,7 @@ function OperatorSpace() {
             >
               <p className="tnum text-title text-ink">N-07</p>
               <p className="mt-1 text-small text-ink-soft machine:text-ink-muted">
-                Battery 82 percent · 4 s ago
+                Battery 82% · 4 s ago
               </p>
             </ConsoleCard>
             <ConsoleCard
@@ -445,12 +450,72 @@ function MachineSpace() {
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The masthead, and the page's only h1.
+ *
+ * The two space sections open with a display headline each, which is why they
+ * used to be two h1s on one document. They are h2s now and this is the heading
+ * the outline hangs off.
+ */
+function Masthead() {
+  return (
+    <header className="border-b border-line bg-bg px-8 pt-16 pb-14 md:px-16 lg:px-24">
+      <div className="mx-auto grid max-w-[1400px] gap-6 md:grid-cols-[200px_1fr] md:gap-16">
+        <SectionLabel className="self-start">Design system</SectionLabel>
+        <div className="flex flex-col items-start gap-5">
+          <h1 className="max-w-[26ch] text-display text-balance text-ink case-heading">
+            Two worlds, one token layer.
+          </h1>
+          <p className="max-w-[34rem] text-body text-ink-soft">
+            Every component in <code className="font-mono">@/components/console</code>{" "}
+            renders in both spaces without being told which one it is in. This page is
+            where that claim is checked: the tokens each space resolves, then the library
+            itself, every entry drawn twice from the same element.
+          </p>
+          <ConsoleButton variant="secondary" size="sm" asChild>
+            <Link href="/">Back to the fleet</Link>
+          </ConsoleButton>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+/** The library, documented: props, states, one real call, and the a11y fact. */
+function Library() {
+  return (
+    <section className="bg-bg px-8 py-16 text-ink md:px-16 lg:px-24">
+      <div className="mx-auto max-w-[1400px]">
+        <header className="grid gap-6 pb-8 md:grid-cols-[200px_1fr] md:gap-16">
+          <SectionLabel className="self-start">The library</SectionLabel>
+          <div className="flex flex-col gap-5">
+            <h2 className="max-w-[24ch] text-display text-balance text-ink case-heading">
+              Thirteen components, and what they promise.
+            </h2>
+            <p className="max-w-[34rem] text-body text-ink-soft">
+              Store-wired regions live in{" "}
+              <code className="font-mono">@/components/fleet</code> and are not documented
+              here: a lint rule stops anything in this library from importing a store,
+              which is what keeps the list below re-usable rather than app-shaped.
+            </p>
+          </div>
+        </header>
+        {SPECIMENS.map((spec) => (
+          <SpecimenEntry key={spec.name} spec={spec} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function SystemPage() {
   // The disclaimer footer is rendered by the root layout, on every route.
   return (
     <main id="main">
+      <Masthead />
       <OperatorSpace />
       <MachineSpace />
+      <Library />
     </main>
   );
 }

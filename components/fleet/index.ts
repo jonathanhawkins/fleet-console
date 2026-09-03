@@ -20,7 +20,8 @@
 /* -- the fleet page ------------------------------------------------------- */
 export { FleetKpis, LiveConnectionStatus } from "./fleet-kpis";
 export { FleetMap } from "./fleet-map";
-export { FleetRail, FleetUnitCount } from "./fleet-rail";
+export { FleetRail } from "./fleet-rail";
+export { FleetRailControls } from "./fleet-rail-controls";
 export { AlertFeedControls, AlertRail } from "./alert-rail";
 export { CohortCard } from "./cohort-card";
 

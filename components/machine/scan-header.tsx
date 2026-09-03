@@ -179,6 +179,69 @@ function CloseDescentControl({ phase }: { phase: "scanning" | "verdict" }) {
 }
 
 /**
+ * The top-level subsystem a walked path belongs to: `/sys/actuator_bus/...`
+ * reads as `sys`. Not a vocabulary of its own — it is never printed — only a
+ * key for noticing when the walk has moved from one branch of the tree to
+ * another, which is a fact derivable from the path the sim already sent
+ * rather than a list of area names this file would have to keep in sync with
+ * sim/engine/diagnostics.ts.
+ */
+function walkArea(path: string): string {
+  return path.split("/")[1] ?? path;
+}
+
+/**
+ * The status line's *spoken* cadence, a coarser thing than its printed one.
+ *
+ * Printed, the line advances on every node walked and every channel counted —
+ * the progress a sighted operator wants under their eye, polled at a glance.
+ * Spoken at that same rate it buries the one line this instrument exists to
+ * deliver: a screen reader queues each of ~20 walk lines and 6 channel lines
+ * as its own polite announcement, so SCAN COMPLETE — the verdict — arrives at
+ * the back of a queue nobody asked to hear, often still being read out when
+ * the finding has been on screen for seconds.
+ *
+ * So the live region is handed a coarser signal instead: the beat changes on
+ * scan start, on a change of subsystem underfoot, on the channel sweep
+ * opening, on a divergence, and on the verdict — never on a walked node or a
+ * counted channel in between — and on each change it is given exactly the
+ * sentence the printed line is already showing. No second vocabulary: this
+ * reuses scanStatusLine verbatim, it only decides when the live region is
+ * allowed to repeat it.
+ *
+ * The beat is compared against the previous render's and, on a change, the
+ * announced sentence is updated *during* render rather than from an effect —
+ * the documented pattern for state derived from a changing input (React:
+ * "storing information from previous renders"). An effect would add a tick
+ * between the commit that changed the beat and the one that speaks it, for
+ * no benefit this region needs.
+ */
+function useAnnouncedStatus(
+  progress: ScanProgress,
+  link: ScanLink,
+  phase: "scanning" | "verdict",
+  latestWalkPath: string | null,
+): string {
+  const line = scanStatusLine(progress, link, phase);
+
+  const beat =
+    link !== "open"
+      ? `hold:${link}`
+      : phase === "verdict"
+        ? "verdict"
+        : progress.channels > 0
+          ? `sweep:${progress.flagged}`
+          : progress.walked > 0
+            ? `walk:${latestWalkPath ? walkArea(latestWalkPath) : ""}`
+            : "init";
+
+  const [announced, setAnnounced] = React.useState({ beat, line });
+  if (announced.beat !== beat) setAnnounced({ beat, line });
+
+  return announced.line;
+}
+
+/**
  * The bottom rule's one sentence: what the scanner is doing right now.
  *
  * Every word of it is composed in scan-copy.ts from session state, so the
@@ -212,6 +275,12 @@ export function ScanStatusBar({
 
   const line = scanStatusLine(progress, link, phase);
   const held = link !== "open";
+  const spoken = useAnnouncedStatus(
+    progress,
+    link,
+    phase,
+    session?.walkLines.at(-1) ?? null,
+  );
 
   return (
     // Same reasoning as the header's top inset: this rule sits on the bottom
@@ -219,13 +288,25 @@ export function ScanStatusBar({
     // indicator. The minimized verdict's RESTORE and RETURN live here.
     <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:px-6">
       <p
-        // Spoken, because the status line is where a held link is announced and
-        // the operator may be watching the waveforms rather than the footer.
-        aria-live="polite"
         className={cn("tnum text-label uppercase", held ? "text-alert" : "text-ink-soft")}
       >
         {line}
       </p>
+      {/* The printed line above moves on every tick of progress; this is the
+          spoken channel, throttled to the beats a human wants (see
+          useAnnouncedStatus). Visually hidden so the two never read as two
+          disagreeing lines of the same fact — `aria-atomic` because every
+          update replaces the whole sentence, never a fragment of the last
+          one, and the region should be read as one clause each time rather
+          than diffed against what it said before. */}
+      <span
+        data-slot="scan-announce"
+        className="sr-only"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {spoken}
+      </span>
       {trailing}
     </div>
   );

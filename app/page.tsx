@@ -7,7 +7,7 @@ import {
   FleetKpis,
   FleetMap,
   FleetRail,
-  FleetUnitCount,
+  FleetRailControls,
   LiveConnectionStatus,
 } from "@/components/fleet";
 
@@ -129,7 +129,7 @@ export default function FleetPage() {
             padding="none"
             label="Units"
             labelAs="h2"
-            action={<FleetUnitCount />}
+            action={<FleetRailControls />}
             className="flex min-h-0 flex-col overflow-hidden [grid-area:rail]"
           >
             <FleetRail />

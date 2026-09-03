@@ -13,6 +13,14 @@ import {
 } from "@/lib/stores";
 import { useCohortMember } from "./cohort-membership";
 import {
+  attentionRank,
+  matchesFilter,
+  selectUnits,
+  setRailFilter,
+  useRailFilter,
+  useRailOrder,
+} from "./fleet-rail-controls";
+import {
   formatRecency,
   RegionNote,
   UNIT_CARD_HEIGHT,
@@ -23,7 +31,9 @@ import {
 import { useUnitPosture } from "./unit-posture-tag";
 
 /**
- * The unit rail: every home in the fleet, live, in snapshot order.
+ * The unit rail: every home in the fleet, live, filtered and ordered at the
+ * operator's choice (fleet-rail-controls.tsx owns the header that drives
+ * both, and the pure rules behind them).
  *
  * Virtualized at eight rows, which looks like overkill and is the point. The
  * fleet in this demo is eight homes; the product it is pretending to be has
@@ -32,10 +42,21 @@ import { useUnitPosture } from "./unit-posture-tag";
  * fixed row height (no measurement pass), small overscan, and a roving
  * tabindex so the tab order stays one stop deep however long the list gets.
  *
- * Subscription discipline (lib/stores/README.md): the rail subscribes to
- * `unitIds` and nothing else, so a telemetry batch cannot re-render the list.
- * Each row subscribes to its own unit's summary and battery, so a batch for
- * N-03 re-renders exactly one row — the one for N-03.
+ * Subscription discipline (lib/stores/README.md): a telemetry batch still
+ * cannot re-render the list — batches never touch `units`, only the telemetry
+ * channel, which each row reads for itself. Filtering and ordering DO need a
+ * second, rarer subscription (`selectUnits`, whole map, from the controls
+ * file) to read every unit's id/name/status for the list itself to sort by;
+ * that commits only on snapshot/alert/unit_update — a handful of times an
+ * hour, same cost class as the existing `trending` subscription just below
+ * it, never a 10 Hz batch. What keeps THAT subscription from becoming
+ * everyone's problem is `FleetRailRow` being memoized: when the shell
+ * re-renders for a reason that left a given row's own props untouched, React
+ * skips that row's call entirely, so the row's OWN subscription — not the
+ * shell's — is still the only thing that can make it re-render. Each row
+ * subscribes to its own unit's summary and battery, so a batch for N-03
+ * re-renders exactly one row — the one for N-03 — filtered, sorted, or
+ * neither.
  */
 
 /** Small on purpose: rows are cheap and the scroll is short. */
@@ -57,6 +78,8 @@ export const MAX_VISIBLE_ROWS = 8;
 /**
  * The floor: a fleet still reporting in (or a lost connection) must not fold
  * the shell up, because the map and the feed take their height from the rail.
+ * A filter that matches nothing sits on the same floor — see the empty-filter
+ * branch below.
  */
 export const MIN_VISIBLE_ROWS = 4;
 
@@ -82,8 +105,9 @@ export function railScrollportHeight(
 
 export function FleetRail() {
   const unitIds = useFleetStore(selectUnitIds);
+  const units = useFleetStore(selectUnits);
   /**
-   * The rail's second subscription, and the exception that proves the rule
+   * The rail's third subscription, and the exception that proves the rule
    * above: row *height* is the list's business, not a row's, so the one fact
    * that changes it has to be known here.
    *
@@ -95,36 +119,75 @@ export function FleetRail() {
    * of times an hour, and in the demo is twice.
    */
   const trending = useFleetStore(selectTrendingUnits);
+  const filterQuery = useRailFilter();
+  const order = useRailOrder();
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = React.useState(0);
   // Set by a key press, consumed by the effect below: the row to focus may not
   // be mounted yet when the key is handled, so the focus is a *request*.
   const focusPending = React.useRef(false);
 
+  const trendingIds = React.useMemo(
+    () => new Set(trending.map((t) => t.unitId)),
+    [trending],
+  );
+
+  /**
+   * The rows actually on screen: filtered by id/home name, then — only in
+   * attention-first — reordered by severity (attentionRank, fleet-rail-
+   * controls.tsx). `Array#sort` has been stable since ES2019, so units tied
+   * on rank keep `filtered`'s roster order for free; that IS the tiebreak,
+   * not a second sort key to maintain.
+   *
+   * Cheap at 500 units (measured: a full filter + sort is well under a
+   * millisecond), so this runs on every keystroke with no debounce — there is
+   * no 100 ms budget to protect here.
+   */
+  const visibleIds = React.useMemo(() => {
+    const query = filterQuery.trim().toLowerCase();
+    const filtered = query
+      ? unitIds.filter((id) => {
+          const unit = units[id];
+          return unit !== undefined && matchesFilter(unit, query);
+        })
+      : unitIds;
+    if (order !== "attention") return filtered;
+    return [...filtered].sort((a, b) => {
+      const ua = units[a];
+      const ub = units[b];
+      const ra = ua ? attentionRank(ua.status, trendingIds.has(a)) : 3;
+      const rb = ub ? attentionRank(ub.status, trendingIds.has(b)) : 3;
+      return ra - rb;
+    });
+  }, [unitIds, units, trendingIds, filterQuery, order]);
+
   // Still no measurement pass: two known heights chosen by index, not a
-  // ResizeObserver reading the DOM. `trending` holds 0 or 1 entries in
-  // practice, so the scan is cheaper than the closure that avoids it.
+  // ResizeObserver reading the DOM.
   const estimateSize = (index: number): number => {
-    const unitId = unitIds[index];
-    return unitId !== undefined && trending.some((t) => t.unitId === unitId)
+    const unitId = visibleIds[index];
+    return unitId !== undefined && trendingIds.has(unitId)
       ? UNIT_CARD_TRENDING_HEIGHT
       : UNIT_CARD_HEIGHT;
   };
 
   const virtualizer = useVirtualizer({
-    count: unitIds.length,
+    count: visibleIds.length,
     getScrollElement: () => scrollRef.current,
     estimateSize,
     overscan: OVERSCAN,
   });
 
   // The virtualizer memoizes its measurements on count/keys/size-cache and not
-  // on the identity of `estimateSize`, so a row that has just started (or
-  // stopped) trending needs the cache dropped or the list keeps laying it out
-  // at the old height. Runs when trending truth moves, and never on a batch.
+  // on the identity of `estimateSize`, so anything that can change what index
+  // N is (a row starting to trend, a filter or sort reshuffling the list)
+  // needs the cache dropped or the list keeps laying rows out at stale
+  // heights. `visibleIds` changes for every one of those reasons — trending
+  // truth is one of its own dependencies — so keying the effect on it alone
+  // covers filtering, ordering AND trending in one place. Never runs on a
+  // telemetry batch: nothing here is in the batch's write path.
   React.useEffect(() => {
     virtualizer.measure();
-  }, [trending, virtualizer]);
+  }, [visibleIds, virtualizer]);
 
   React.useEffect(() => {
     if (!focusPending.current) return;
@@ -151,12 +214,12 @@ export function FleetRail() {
 
   const moveTo = React.useCallback(
     (index: number) => {
-      const clamped = Math.max(0, Math.min(index, unitIds.length - 1));
+      const clamped = Math.max(0, Math.min(index, visibleIds.length - 1));
       focusPending.current = true;
       virtualizer.scrollToIndex(clamped, { align: "auto" });
       setActiveIndex(clamped);
     },
-    [unitIds.length, virtualizer],
+    [visibleIds.length, virtualizer],
   );
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLUListElement>) => {
@@ -176,7 +239,7 @@ export function FleetRail() {
         break;
       case "End":
         event.preventDefault();
-        moveTo(unitIds.length - 1);
+        moveTo(visibleIds.length - 1);
         break;
       default:
         break;
@@ -187,7 +250,13 @@ export function FleetRail() {
     return (
       <div
         data-slot="fleet-rail-scrollport"
-        style={{ height: railScrollportHeight(0, () => UNIT_CARD_HEIGHT) }}
+        // A fleet that has not reported yet reserves the height it is about to
+        // need, not the floor: every fleet this console has ever shown fills
+        // MAX_VISIBLE_ROWS (eight units, or five hundred), so anything shorter
+        // buys a layout shift the moment the snapshot lands. The floor is for
+        // the branch below, where the operator's own filter emptied the list
+        // and the height they are looking at is the height they asked for.
+        style={{ height: UNIT_CARD_HEIGHT * MAX_VISIBLE_ROWS }}
         className="flex min-h-0 flex-col"
       >
         <RegionNote className="flex-1">
@@ -197,9 +266,36 @@ export function FleetRail() {
     );
   }
 
-  // A list shorter than the fleet is possible mid-snapshot; keep the roving
-  // stop inside the list rather than pointing at a row that is gone.
-  const active = Math.min(activeIndex, unitIds.length - 1);
+  // A fleet that reported in, filtered down to nothing. Distinct copy from
+  // the empty-fleet branch above (the reason is different) and the same
+  // floor beneath it (railScrollportHeight(0, …)) so a filter that matches
+  // nothing does not fold the shell up either.
+  if (visibleIds.length === 0) {
+    return (
+      <div
+        data-slot="fleet-rail-scrollport"
+        style={{ height: railScrollportHeight(0, () => UNIT_CARD_HEIGHT) }}
+        className="flex min-h-0 flex-col"
+      >
+        <RegionNote className="flex-1">
+          {`No units match “${filterQuery.trim()}.” `}
+          <button
+            type="button"
+            onClick={() => setRailFilter("")}
+            className="text-ink underline decoration-line-strong underline-offset-2 hover:text-ink-hover"
+          >
+            Clear the search
+          </button>
+          {` to see all ${unitIds.length}.`}
+        </RegionNote>
+      </div>
+    );
+  }
+
+  // A list shorter than the fleet is possible mid-snapshot, or the operator's
+  // own filter; keep the roving stop inside the list rather than pointing at
+  // a row that is gone or was filtered out.
+  const active = Math.min(activeIndex, visibleIds.length - 1);
 
   return (
     // An explicit height rather than `flex-1`: the rows size the scrollport
@@ -211,7 +307,7 @@ export function FleetRail() {
     <div
       ref={scrollRef}
       data-slot="fleet-rail-scrollport"
-      style={{ height: railScrollportHeight(unitIds.length, estimateSize) }}
+      style={{ height: railScrollportHeight(visibleIds.length, estimateSize) }}
       className="min-h-0 overflow-x-hidden overflow-y-auto"
     >
       <ul
@@ -220,7 +316,7 @@ export function FleetRail() {
         className="relative w-full"
       >
         {virtualizer.getVirtualItems().map((row) => {
-          const unitId = unitIds[row.index];
+          const unitId = visibleIds[row.index];
           if (unitId === undefined) return null;
           return (
             <li
@@ -258,15 +354,31 @@ interface FleetRailRowProps {
 }
 
 /**
- * One row's subscription boundary — the reason this is a component at all.
+ * One row's subscription boundary — the reason this is a component at all,
+ * and now also the reason it is memoized.
  *
  * Both selectors return values that are `Object.is`-stable while this unit is
  * unchanged, so ten telemetry batches a second for seven other homes produce
  * zero renders here. `useUnitBattery` is a per-unit channel subscription
  * quantised to 0.1 %, which is what keeps even this unit's own batches from
  * re-rendering the row ten times a second.
+ *
+ * `React.memo` is what keeps the SHELL's own subscriptions (`units`, for
+ * filtering and ordering) from becoming every row's problem: when the shell
+ * re-renders for a reason that left THIS row's props untouched — another
+ * unit's alert, a filter keystroke that still matches this unit, a re-sort
+ * that left this unit at the same index — React skips the call rather than
+ * re-running it and discarding an identical result. A row whose own props DID
+ * change (it moved index, it gained or lost the roving tabindex) still
+ * re-renders normally.
  */
-function FleetRailRow({ unitId, index, active, onFocusRow, trend }: FleetRailRowProps) {
+function FleetRailRowImpl({
+  unitId,
+  index,
+  active,
+  onFocusRow,
+  trend,
+}: FleetRailRowProps) {
   const unit = useFleetStore(selectUnit(unitId));
   const battery = useUnitBattery(unitId);
   const posture = useUnitPosture(unitId);
@@ -308,16 +420,4 @@ function FleetRailRow({ unitId, index, active, onFocusRow, trend }: FleetRailRow
   );
 }
 
-/**
- * The rail header's trailing slot. Its own component, and its own subscription,
- * so that counting the fleet cannot re-render the fleet.
- */
-export function FleetUnitCount() {
-  const count = useFleetStore(selectUnitIds).length;
-  if (count === 0) return null;
-  return (
-    <span className="text-label text-ink-soft uppercase">
-      {count} {count === 1 ? "unit" : "units"}
-    </span>
-  );
-}
+const FleetRailRow = React.memo(FleetRailRowImpl);

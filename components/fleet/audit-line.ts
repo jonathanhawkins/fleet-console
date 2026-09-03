@@ -96,6 +96,13 @@ export const AUDIT_TAG: Record<AuditKind, AuditTag> = {
 };
 
 /**
+ * Every kind the store can append, read off `AUDIT_TAG` rather than
+ * hand-copied — a kind the record above forgot to tone would already fail to
+ * compile, so this list can never fall behind the union it names.
+ */
+export const AUDIT_KINDS = Object.keys(AUDIT_TAG) as AuditKind[];
+
+/**
  * The wire prefixes every alert with the house name, because the fleet feed
  * mixes eight houses in one list. Every surface that renders this log is
  * scoped to one unit, so the prefix is the console telling the operator where

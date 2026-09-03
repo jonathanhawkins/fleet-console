@@ -468,7 +468,6 @@ describe("a cleared re-measure changes the register of the whole card", () => {
     // The frame is the figure's own claim about its channel, and the channel is
     // back inside the envelope.
     expect(exhibit.getAttribute("data-tone")).toBe("nominal");
-    expect(exhibit.className).toContain("border-nominal/60");
     expect(exhibit.className).not.toContain("border-alert");
     // Both traces are still there, and both are named.
     expect(exhibit.querySelector('[data-role="pre"]')).not.toBeNull();

@@ -265,6 +265,25 @@
     color: var(--ink-soft);
   }
 
+  /* -- basemap unavailable -------------------------------------------------- */
+
+  /* What this region says when the tile host cannot be reached
+     (fleet-map-view.tsx's degraded reveal): RegionNote's own quiet voice,
+     laid down as a plate in the one open corner — same translucency and
+     corner-radius idiom as the privacy note and the attribution, so a
+     cartography failure reads as more small print, not an alarm.
+     pointer-events off, like its neighbours: it must never be able to eat a
+     marker click or a pan. */
+  .fleet-map-degraded-note {
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    border-radius: 0 0 var(--r-pill) 0;
+    background-color: color-mix(in srgb, var(--bg) 78%, transparent);
+  }
+
   /* -- MapLibre chrome ----------------------------------------------------- */
 
   .fleet-map .maplibregl-ctrl-attrib {

@@ -12,7 +12,7 @@ import { createUnitLayer, type UnitLayer } from "./fleet-map-layer";
 import { createUnitMarker, type UnitMarker } from "./fleet-map-marker";
 import { approximatePosition, APPROX_NOTE, MAP_MAX_ZOOM } from "./fleet-map-privacy";
 import { createMapReturn, troubledOffMap } from "./map-return";
-import { usePrefersReducedMotion } from "@/components/console";
+import { RegionNote, usePrefersReducedMotion } from "@/components/console";
 
 /**
  * The fleet map — and the one component in this app that React does not render
@@ -37,9 +37,14 @@ import { usePrefersReducedMotion } from "@/components/console";
  * popped into. Now the frame lays the surface token down as ground, the privacy
  * note and the tile attribution sit in their final corners from the first
  * frame, the fleet's markers land on that ground as soon as the style parses,
- * and only the canvas fades in, on the map's first `load` (or `idle`, whichever
- * comes first). Under prefers-reduced-motion it switches instead of fading.
- * Nothing changes size at any point: the container is flex-sized by the card.
+ * and only the canvas fades in, on the map's first `load` or `idle`. Under
+ * prefers-reduced-motion it switches instead of fading. Nothing changes size
+ * at any point: the container is flex-sized by the card.
+ *
+ * That reveal is also bounded: a tile host that is unreachable rather than
+ * merely slow can fire neither `load` nor `idle`, so `error` and a timeout
+ * are two more branches on the same reveal (below) — a held-back canvas is
+ * worse than an unstyled one, and the region says so.
  */
 
 /** Hand-authored near-monochrome style; see the metadata block inside it. */
@@ -106,15 +111,38 @@ interface MarkerEntry {
 }
 
 /**
- * What the basemap is doing: `pending` until the first fully-rendered frame,
- * `ready` from then on. Stamped on the frame as `data-basemap`, which is what
- * the canvas fade keys on — and the one piece of React state in this file.
+ * What the basemap is doing: `pending` until the reveal fires — on `load`,
+ * `idle`, `error`, or the timeout below, whichever comes first — `ready`
+ * from then on. Stamped on the frame as `data-basemap`, which is what the
+ * canvas fade keys on.
  */
 type BasemapState = "pending" | "ready";
+
+/**
+ * The sad path's backstop. `load` and `idle` are the happy path; a tile host
+ * that is unreachable outright (rather than merely slow) can fire neither —
+ * nothing was ever "settled", it was refused — and MapLibre's own `error`
+ * event, while it usually gets there first, is not guaranteed to fire for
+ * every failure shape (a connection that hangs rather than one that is
+ * refused, say). So the canvas is never held past this: long enough that a
+ * real response on a slow connection still wins the race, short enough that
+ * an operator looking at a blank rectangle would already call it broken.
+ */
+const BASEMAP_TIMEOUT_MS = 2500;
+
+/**
+ * What this region says when the reveal happened without a basemap to show.
+ * RegionNote's own voice, not a new one: the markers, the rail and the alert
+ * feed are unaffected, and the copy says only the thing that is actually
+ * true — the cartography is missing, not the fleet.
+ */
+export const BASEMAP_UNAVAILABLE_NOTE =
+  "Base map unavailable. Fleet positions are unaffected.";
 
 export default function FleetMapView() {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [basemap, setBasemap] = React.useState<BasemapState>("pending");
+  const [degraded, setDegraded] = React.useState(false);
   const reducedMotion = usePrefersReducedMotion();
   const router = useRouter();
   // The effect must not re-run when Next hands back a new router object, and it
@@ -345,18 +373,32 @@ export default function FleetMapView() {
      * to fade in *to*. `idle` is the belt to that brace: it fires once the
      * map has nothing left to fetch or animate, which covers a tile origin
      * that answered some requests with errors (those still count as settled)
-     * and would otherwise leave the canvas held at zero for good. Whichever
-     * fires first wins; the other finds the flag set.
+     * and would otherwise leave the canvas held at zero for good.
+     *
+     * Both are still a promise the tile host can simply not keep. `error`
+     * fires as soon as MapLibre gives up on a resource it cannot recover —
+     * a tile, but also the glyph range the style's one text layer
+     * ("place-label") depends on, and the same event either way, so the
+     * reveal does not need to know which. BASEMAP_TIMEOUT_MS is the backstop
+     * under that, for the failure `error` itself is not guaranteed to
+     * report. Whichever of the four fires first wins the reveal — the other
+     * three find `revealed` already set — and only the first two hand the
+     * canvas a basemap MapLibre actually painted; the last two hand it
+     * whatever ground is under an unpainted canvas and say so, quietly, in
+     * the note below.
      */
     let disposed = false;
     let revealed = false;
-    const reveal = (): void => {
+    const reveal = (isDegraded: boolean): void => {
       if (disposed || revealed) return;
       revealed = true;
       setBasemap("ready");
+      if (isDegraded) setDegraded(true);
     };
-    map.once("load", reveal);
-    map.once("idle", reveal);
+    map.once("load", () => reveal(false));
+    map.once("idle", () => reveal(false));
+    map.once("error", () => reveal(true));
+    const revealTimeoutId = window.setTimeout(() => reveal(true), BASEMAP_TIMEOUT_MS);
 
     // Outside React by design. Fires on every store commit — including ten
     // telemetry batches a second — so the first thing it does is prove nothing
@@ -381,6 +423,7 @@ export default function FleetMapView() {
 
     return () => {
       disposed = true;
+      window.clearTimeout(revealTimeoutId);
       unsubscribe();
       mapReturn.el.remove();
       for (const entry of markers.values()) entry.marker.remove();
@@ -404,6 +447,7 @@ export default function FleetMapView() {
     <div
       data-slot="fleet-map-frame"
       data-basemap={basemap}
+      data-basemap-degraded={degraded || undefined}
       className={cn(
         "relative flex min-h-0 flex-1 flex-col",
         // Only the canvas is held — the markers, in the same canvas container,
@@ -425,6 +469,17 @@ export default function FleetMapView() {
         // in the card. Constant — see the frame note above.
         className="fleet-map min-h-0 flex-1 bg-surface"
       />
+      {/* The sad path, said once and quietly: RegionNote's own voice, laid
+          down as a fourth corner plate rather than stretched over the fleet —
+          a full-bleed empty-state note would compete with the very markers it
+          is careful not to hide. Absolutely positioned (the CSS class), so it
+          costs the map no size; pointer-events off, like the note below, so
+          it can never eat a marker click or a pan. */}
+      {degraded && (
+        <RegionNote className="fleet-map-degraded-note flex-none px-2 py-0.5">
+          {BASEMAP_UNAVAILABLE_NOTE}
+        </RegionNote>
+      )}
       {/* The privacy stance, stated where the presentation applies:
           positions are grid-quantized and the zoom is capped, and a map that
           quietly blurred the truth without saying so would read as a map with

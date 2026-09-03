@@ -286,14 +286,17 @@ describe("first-visit nudge — how it reads", () => {
     render(<AlertRail />);
 
     // The same 3px inset geometry UnitCard uses for the cohort mark — an inset
-    // shadow, so a marked row and an unmarked one measure identically.
-    expect(marked()[0]).toHaveClass("shadow-[inset_3px_0_0_var(--alert)]");
+    // shadow, so a marked row and an unmarked one measure identically. The
+    // mark's colour and the row's own `data-status` are one value
+    // (alert-row.tsx), so the token is the assertion — a class-string check
+    // would break on a refactor that left the colour itself unchanged.
+    expect(marked()[0]).toHaveAttribute("data-status", "alert");
   });
 
   it("uses the warn tone for an amber", () => {
     raise({ id: "al-001", unitId: "N-07", severity: "amber" });
     render(<AlertRail />);
-    expect(marked()[0]).toHaveClass("shadow-[inset_3px_0_0_var(--warn)]");
+    expect(marked()[0]).toHaveAttribute("data-status", "warn");
   });
 
   it("adds nothing to the row's accessible name — it is emphasis, not a fact", () => {

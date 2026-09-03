@@ -8,6 +8,7 @@ import { envelope, setDescentOccluded, stripScales } from "@/components/console"
 import { resetCursor, setCursor } from "./telemetry-hover";
 // Type-only, so it is erased before the hoisted vi.mock below takes effect.
 import { type TelemetryStripProps } from "./telemetry-strip";
+import { type FakeCtx, makeCtx } from "@/test/canvas-recorder";
 
 /**
  * The strip's two contracts.
@@ -97,145 +98,8 @@ const {
 // scaffolding: a recording 2d context, an eager ResizeObserver, a hand-cranked
 // animation frame
 
-export interface FakeRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  fill: string;
-  alpha: number;
-}
-
-export interface FakeCtx {
-  calls: {
-    clearRect: number;
-    beginPath: number;
-    moveTo: number;
-    lineTo: number;
-    arc: number;
-  };
-  strokes: string[];
-  widths: number[];
-  points: Array<[number, number]>;
-  rects: FakeRect[];
-  texts: Array<{ text: string; x: number; y: number }>;
-  /** Every `setLineDash` argument, by reference — the zero-alloc claim needs it. */
-  dashes: number[][];
-  setLineDash: (segments: number[]) => void;
-  setTransform: ReturnType<typeof vi.fn>;
-  reset: () => void;
-  clearRect: () => void;
-  beginPath: () => void;
-  moveTo: (x: number, y: number) => void;
-  lineTo: (x: number, y: number) => void;
-  arc: (x: number, y: number, r: number) => void;
-  fill: () => void;
-  fillRect: (x: number, y: number, w: number, h: number) => void;
-  fillText: (text: string, x: number, y: number) => void;
-  measureText: (text: string) => { width: number };
-  stroke: () => void;
-  strokeStyle: string;
-  fillStyle: string;
-  globalAlpha: number;
-  lineWidth: number;
-  lineJoin: string;
-  lineCap: string;
-  font: string;
-  textAlign: string;
-  textBaseline: string;
-}
-
 let ctx: FakeCtx;
 let frames: FrameRequestCallback[] = [];
-
-export function makeCtx(): FakeCtx {
-  const calls = { clearRect: 0, beginPath: 0, moveTo: 0, lineTo: 0, arc: 0 };
-  const strokes: string[] = [];
-  const widths: number[] = [];
-  const points: Array<[number, number]> = [];
-  const rects: FakeRect[] = [];
-  const texts: Array<{ text: string; x: number; y: number }> = [];
-  const dashes: number[][] = [];
-  let fillStyle = "";
-  let globalAlpha = 1;
-  // One literal, no spreads: object spread copies accessors *by value*, which
-  // would silently turn `strokeStyle` back into a plain field and record
-  // nothing.
-  return {
-    calls,
-    strokes,
-    widths,
-    points,
-    rects,
-    texts,
-    dashes,
-    // Kept by reference, not copied: "a frame allocates no dash array" is only
-    // checkable if the recorder can be asked whether it saw the same object.
-    setLineDash: (segments: number[]) => {
-      dashes.push(segments);
-    },
-    setTransform: vi.fn(),
-    reset() {
-      calls.clearRect = 0;
-      calls.beginPath = 0;
-      calls.moveTo = 0;
-      calls.lineTo = 0;
-      calls.arc = 0;
-      strokes.length = 0;
-      widths.length = 0;
-      points.length = 0;
-      rects.length = 0;
-      texts.length = 0;
-      dashes.length = 0;
-    },
-    clearRect: () => (calls.clearRect += 1),
-    beginPath: () => (calls.beginPath += 1),
-    moveTo: (x: number, y: number) => {
-      calls.moveTo += 1;
-      points.push([x, y]);
-    },
-    lineTo: (x: number, y: number) => {
-      calls.lineTo += 1;
-      points.push([x, y]);
-    },
-    arc: (x: number, y: number) => {
-      calls.arc += 1;
-      points.push([x, y]);
-    },
-    fill: () => {},
-    fillRect: (x: number, y: number, w: number, h: number) => {
-      rects.push({ x, y, w, h, fill: fillStyle, alpha: globalAlpha });
-    },
-    fillText: (text: string, x: number, y: number) => {
-      texts.push({ text, x, y });
-    },
-    measureText: (text: string) => ({ width: text.length * 6 }),
-    stroke: () => {},
-    set strokeStyle(v: string) {
-      strokes.push(v);
-    },
-    get fillStyle() {
-      return fillStyle;
-    },
-    set fillStyle(v: string) {
-      fillStyle = v;
-    },
-    get globalAlpha() {
-      return globalAlpha;
-    },
-    set globalAlpha(v: number) {
-      globalAlpha = v;
-    },
-    set lineWidth(v: number) {
-      widths.push(v);
-    },
-    set lineJoin(_v: string) {},
-    set lineCap(_v: string) {},
-    set font(_v: string) {},
-    set textAlign(_v: string) {},
-    set textBaseline(_v: string) {},
-  };
-}
 
 function frame(now = 0): void {
   const due = frames;
@@ -257,6 +121,16 @@ function mount(ui: React.ReactElement) {
   const view = render(ui);
   ctx.reset();
   return view;
+}
+
+/** The strip this file is about, at its default size — most tests want only this. */
+function mountStrip() {
+  return mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+}
+
+/** Same unit and channel, expanded — the overlay and its controls become reachable. */
+function mountExpanded() {
+  return mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" expanded />);
 }
 
 function telemetry(
@@ -398,7 +272,7 @@ describe("breach detection", () => {
 
 describe("TelemetryStrip", () => {
   it("renders its label and an em-dash before any sample has arrived", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     expect(screen.getByText("Temp")).toBeVisible();
     expect(screen.getByText("No reading yet")).toBeInTheDocument();
   });
@@ -438,7 +312,7 @@ describe("TelemetryStrip", () => {
   });
 
   it("draws the guide and then one path through the ring", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(4);
     frame();
 
@@ -461,7 +335,7 @@ describe("TelemetryStrip", () => {
   });
 
   it("skips the canvas entirely on a frame with no new telemetry", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(2);
     frame();
     const drawn = { ...ctx.calls };
@@ -476,7 +350,7 @@ describe("TelemetryStrip", () => {
   });
 
   it("does not re-render for a telemetry batch — not once, not ten times", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     expect(renders.count).toBe(1);
 
     for (let i = 0; i < 10; i += 1) {
@@ -489,7 +363,7 @@ describe("TelemetryStrip", () => {
   });
 
   it("keeps the trace in ink while the joint is inside its envelope", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(3, 34);
     frame();
     expect(ctx.strokes).toEqual([GUIDE, INK]);
@@ -500,7 +374,7 @@ describe("TelemetryStrip", () => {
   it("tints the trace with the unit's severity once the measure runs out of band", () => {
     amber();
 
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(3, 52); // knee_L past its 44 C ceiling
     frame();
     expect(ctx.strokes).toEqual([GUIDE, WARN]);
@@ -530,7 +404,7 @@ describe("TelemetryStrip", () => {
    */
   it("washes the stretch where the measure left the envelope, under the trace", () => {
     amber();
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(40, 34); // in band
     push(30, 52); // out of band
     push(30, 34); // back in band
@@ -559,7 +433,7 @@ describe("TelemetryStrip", () => {
    */
   it("holds a one-sample excursion at a floor width so it cannot vanish", () => {
     amber();
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(40, 34);
     push(1, 52);
     push(40, 34);
@@ -578,7 +452,7 @@ describe("TelemetryStrip", () => {
   });
 
   it("pauses under an opaque descent and repaints the caught-up trace on ascend", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(2);
     frame();
     expect(ctx.calls.clearRect).toBe(1);
@@ -606,7 +480,7 @@ describe("TelemetryStrip", () => {
   });
 
   it("does not repaint a canvas that was already current when the descent lifts", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(2);
     frame();
     expect(ctx.calls.clearRect).toBe(1);
@@ -633,7 +507,7 @@ describe("TelemetryStrip", () => {
   it("inks the first reading in on the same element the em-dash was on", () => {
     vi.useFakeTimers();
     try {
-      mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+      mountStrip();
 
       const readout = screen.getByText("No reading yet").parentElement;
       expect(readout).toHaveClass("transition-colors", "text-ink-muted");
@@ -657,7 +531,7 @@ describe("TelemetryStrip", () => {
 
   it("draws with the operator fallbacks only where the cascade is silent", () => {
     stubCascade({});
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(3, 34);
     frame();
     expect(ctx.strokes).toEqual([
@@ -668,7 +542,7 @@ describe("TelemetryStrip", () => {
   });
 
   it("leaves the shared loop when it unmounts", () => {
-    const view = mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    const view = mountStrip();
     push(1);
     view.unmount();
     frame();
@@ -698,7 +572,7 @@ describe("TelemetryStrip cursor", () => {
       ?.getAttribute("data-tone");
 
   it("draws a rule and a dot on the hovered sample, and prints its value", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(5, 31);
     push(5, 37);
     frame();
@@ -722,7 +596,7 @@ describe("TelemetryStrip cursor", () => {
 
   it("colours the readout when the hovered sample is the one out of band", () => {
     amber();
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(5, 34);
     push(1, 52);
     frame();
@@ -741,7 +615,7 @@ describe("TelemetryStrip cursor", () => {
   });
 
   it("costs nothing on a frame where the cursor has not moved", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(6);
     act(() => setCursor("N-07", -2, false));
     frame();
@@ -753,7 +627,7 @@ describe("TelemetryStrip cursor", () => {
   });
 
   it("ignores a cursor belonging to another unit", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(6);
     frame();
     const drawn = { ...ctx.calls };
@@ -765,7 +639,7 @@ describe("TelemetryStrip cursor", () => {
   });
 
   it("re-renders nothing across a hundred pointer positions", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(120);
     frame();
     expect(renders.count).toBe(1);
@@ -791,7 +665,7 @@ describe("TelemetryStrip cursor", () => {
  */
 describe("TelemetryStrip expanded", () => {
   it("writes the envelope down the left, names the reference, and dates the window", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" expanded />);
+    mountExpanded();
     push(3, 34);
     frame();
 
@@ -806,14 +680,14 @@ describe("TelemetryStrip expanded", () => {
   });
 
   it("says nothing extra while it is resting", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" />);
+    mountStrip();
     push(3, 34);
     frame();
     expect(ctx.texts).toHaveLength(0);
   });
 
   it("keeps the time axis out of the plot so the trace is not drawn over it", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" expanded />);
+    mountExpanded();
     push(2, 26); // pinned to the floor: the lowest the trace can go
     frame();
     const lowest = Math.max(...ctx.points.map(([, y]) => y));
@@ -940,7 +814,7 @@ describe("TelemetryStrip compare", () => {
   });
 
   it("draws the second trace dashed, dimmer, and under the first", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" expanded />);
+    mountExpanded();
     pushPair(4, 40, 34);
     frame();
     const alone = ctx.calls.lineTo;
@@ -961,7 +835,7 @@ describe("TelemetryStrip compare", () => {
   });
 
   it("puts the other leg's samples on this strip's own scales", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" expanded />);
+    mountExpanded();
     pushPair(3, 40, 34);
     frame();
     ctx.reset();
@@ -985,7 +859,7 @@ describe("TelemetryStrip compare", () => {
   });
 
   it("prints the difference at the cursor, signed", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" expanded />);
+    mountExpanded();
     pushPair(5, 40.2, 34.4);
     frame();
     // Nothing to compare against until it is asked for: an un-compared strip
@@ -999,7 +873,7 @@ describe("TelemetryStrip compare", () => {
   });
 
   it("reads the same instant in both rings", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" expanded />);
+    mountExpanded();
     pushPair(4, 40, 34);
     pushPair(4, 33, 44); // the pair swaps over: the newer half is the other way round
     frame();
@@ -1015,7 +889,7 @@ describe("TelemetryStrip compare", () => {
   });
 
   it("prints a plain zero rather than a negative one when the legs agree", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" expanded />);
+    mountExpanded();
     pushPair(3, 36, 36.01); // −0.01 rounds to −0.0, which reads as a fault
     frame();
     fireEvent.click(toggle());
@@ -1025,7 +899,7 @@ describe("TelemetryStrip compare", () => {
   });
 
   it("drops the overlay and the Δ when the comparison is turned off", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" expanded />);
+    mountExpanded();
     pushPair(4, 40, 34);
     frame();
     fireEvent.click(toggle());
@@ -1041,7 +915,7 @@ describe("TelemetryStrip compare", () => {
   });
 
   it("allocates nothing per frame — one scratch, one dash pattern", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" expanded />);
+    mountExpanded();
     pushPair(4, 40, 34);
     frame();
     fireEvent.click(toggle());
@@ -1060,7 +934,7 @@ describe("TelemetryStrip compare", () => {
   });
 
   it("costs one render for the click and none for the pointer after it", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" expanded />);
+    mountExpanded();
     pushPair(120, 40, 34);
     frame();
     renders.count = 0;
@@ -1077,7 +951,7 @@ describe("TelemetryStrip compare", () => {
   });
 
   it("is a real toggle button, operable from the keyboard", () => {
-    mount(<TelemetryStrip unitId="N-07" joint="knee_L" metric="tempC" expanded />);
+    mountExpanded();
     pushPair(3, 40, 34);
     frame();
 

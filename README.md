@@ -108,23 +108,27 @@ summary; the numbers below are copied from that output.
 
 | Budget                                   | Measured                                 | Verdict |
 | ---------------------------------------- | ---------------------------------------- | ------- |
-| Fleet page initial JS < 200 KB gz        | **180.5 KB**                             | PASS    |
-| Unit page initial JS < 200 KB gz         | **188.7 KB**                             | PASS    |
+| Fleet page initial JS < 200 KB gz        | **185.7 KB**                             | PASS    |
+| Unit page initial JS < 200 KB gz         | **193.9 KB**                             | PASS    |
 | 60 fps during the descent                | p95 frame 9.2 ms, 1 of 974 over 16.7 ms  | PASS    |
 | Interaction latency < 100 ms             | Run-diagnostic press → feedback 1.3 ms   | PASS    |
 | Component view (three + GLB) < 500 KB gz | 321.7 KB, lazy                           | PASS    |
 | 500 units                                | ~5,000 batches/s, 13.4 µs/msg, p95 10 ms | PASS    |
 
 Lighthouse is a gate, not a quote: `node scripts/lighthouse.mjs` runs the
-desktop preset against `/` and `/unit/N-01` on the same export and fails under
-performance 90 or any other category under 100. CI runs it after the budgets
-on every push, gating the three deterministic categories and reporting
-performance, which on a shared runner measures the runner more than the page.
-The full reports, cut on the hardware documented in docs/perf.md, are the
-receipt —
+desktop preset against `/`, `/unit/N-01` and `/system` on the same export and
+fails under performance 90 or any other category under 100. All three score
+**100** in every category. `/system` is in the list because it is the only
+route that renders machine space, so half the design thesis would otherwise
+never be audited; adding it found three real defects on its first run. CI runs
+the script after the budgets on every push, gating the three deterministic
+categories and reporting performance, which on a shared runner measures the
+runner more than the page. The full reports, cut on the hardware documented in
+docs/perf.md, are the receipt —
 [docs/evidence/lighthouse/index.json](docs/evidence/lighthouse/index.json)
-and [docs/evidence/lighthouse/unit-N-01.json](docs/evidence/lighthouse/unit-N-01.json)
-(load either in the Lighthouse Viewer).
+[docs/evidence/lighthouse/unit-N-01.json](docs/evidence/lighthouse/unit-N-01.json)
+and [docs/evidence/lighthouse/system.json](docs/evidence/lighthouse/system.json)
+(load any of them in the Lighthouse Viewer).
 
 Lazy bundles: maplibre (268.6 KB gz) on fleet-page mount, machine space
 (56.1 KB gz) warmed by the incident banner, three + R3F (249.4 KB gz) on

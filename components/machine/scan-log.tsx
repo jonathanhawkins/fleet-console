@@ -134,9 +134,12 @@ export function ScanLog({ link, complete }: ScanLogProps) {
         onScroll={onScroll}
         // A log is a live region for a sighted operator watching it move; for a
         // screen reader it is twenty paths a second of noise. The status bar
-        // under the board is the spoken channel (it is aria-live), so this is
-        // a plain scrollable region with a name.
+        // under the board is the spoken channel (its own throttled aria-live,
+        // scan-header.tsx), so this is explicitly not one: `role="log"` alone
+        // carries an implicit "polite" live-region default in the ARIA spec,
+        // which is exactly the flood this line exists to opt out of.
         role="log"
+        aria-live="off"
         aria-label="Subsystem walk"
         className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-3 py-2"
       >

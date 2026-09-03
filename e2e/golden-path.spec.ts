@@ -262,6 +262,16 @@ test("fleet alert → drill-in → descent → verdict → ascent with incident 
   await expect(headline).toBeVisible({ timeout: 15_000 });
   await expect(overlay.getByText("LEFT KNEE ACTUATOR A-07: GAIN ANOMALY")).toBeVisible();
 
+  // The payload of the whole demo, in a screen reader's own terms: focus moves
+  // to the verdict region itself the instant it lands — not to RETURN, which
+  // would say nothing but "button" — and its accessible name states the
+  // finding the operator descended for.
+  const verdictRegion = overlay.locator('[data-slot="verdict-card"]');
+  await expect(verdictRegion).toBeFocused();
+  await expect(verdictRegion).toHaveAccessibleName(/KNEE_L/i);
+  await expect(verdictRegion).toHaveAccessibleName(/ACTUATOR A-07/i);
+  await expect(verdictRegion).toHaveAccessibleName(/gain anomaly/i);
+
   // The loudest thing in machine space, measured: the finding is set larger
   // than every section label around it (the panel titles and the card's own
   // VERDICT label), and both of its lines carry the alert token — the colour

@@ -149,11 +149,25 @@ export function VerdictCard({
   const report = session.report;
   const acknowledged = session.acknowledged;
 
-  // Focus lands on RETURN so Enter leaves, but without scrolling: the card
-  // arrives beneath the board and the headline must stay where it landed.
-  const returnRef = React.useRef<HTMLButtonElement>(null);
+  /**
+   * Focus lands on the verdict itself, not on RETURN.
+   *
+   * This is the payload of the whole demo, and a screen reader that autofocuses
+   * RETURN on arrival never hears it: "Return to console, button" is the entire
+   * announcement, and the finding underneath it goes unread until someone tabs
+   * backward to find it. The section carries the finding as its accessible name
+   * (aria-labelledby below), so focusing *it* is what makes a screen reader say
+   * the joint, the part and the anomaly the instant the verdict lands — RETURN
+   * stays one control away, reached by Tab exactly as every other control on
+   * the card is.
+   *
+   * `preventScroll: true` is unchanged from the control it replaced: the card
+   * arrives beneath the board and the headline must stay where it landed, not
+   * be scrolled to.
+   */
+  const sectionRef = React.useRef<HTMLElement>(null);
   React.useEffect(() => {
-    returnRef.current?.focus({ preventScroll: true });
+    sectionRef.current?.focus({ preventScroll: true });
   }, []);
 
   const subject = React.useMemo(
@@ -211,7 +225,16 @@ export function VerdictCard({
       initial="hidden"
       animate="shown"
       exit="gone"
-      aria-labelledby="verdict-headline"
+      ref={sectionRef}
+      tabIndex={-1}
+      // The section's own accessible name, not just the headline's: a clean
+      // scan's headline already says the whole finding ("No anomaly
+      // detected"), but a faulted one splits the finding across two lines —
+      // the headline names the joint and the part, the line under it names
+      // the anomaly and, once a recalibration has answered it, the cleared or
+      // partial outcome. Both id'd elements together are what a screen reader
+      // reports the instant focus lands here.
+      aria-labelledby={clean ? "verdict-headline" : "verdict-headline verdict-anomaly"}
       // The outcome, on the card itself, so the register the operator reads is
       // the register a test (and the stylesheet) can ask about by name.
       data-slot="verdict-card"
@@ -314,6 +337,7 @@ export function VerdictCard({
              there and a correction that did not finish are two facts and the
              card owes both. */
           <p
+            id="verdict-anomaly"
             data-slot="verdict-anomaly"
             className={cn(
               "text-title uppercase",
@@ -435,7 +459,6 @@ export function VerdictCard({
         <ConsoleButton
           size="md"
           variant="primary"
-          ref={returnRef}
           className={sheet ? "w-full md:w-auto" : undefined}
           onClick={() => useIncidentStore.getState().completeAscent()}
         >

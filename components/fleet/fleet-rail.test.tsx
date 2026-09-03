@@ -1,5 +1,5 @@
 import * as React from "react";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -18,8 +18,9 @@ interface UnitCardModule {
 /**
  * The rail's two contracts.
  *
- * The visible one: eight homes in snapshot order, keyboard-traversable, each
- * row a link to its unit.
+ * The visible one: eight homes in snapshot order — or, filtered and ordered
+ * at the operator's choice (fleet-rail-controls.tsx) — keyboard-traversable,
+ * each row a link to its unit.
  *
  * The invisible one, and the reason this file exists: **a row must not
  * re-render when another unit's telemetry arrives.** lib/stores proves the
@@ -46,19 +47,43 @@ vi.mock("@/components/console/unit-card", async () => {
   };
 });
 
-const {
-  FleetRail,
-  FleetUnitCount,
-  MAX_VISIBLE_ROWS,
-  MIN_VISIBLE_ROWS,
-  railScrollportHeight,
-} = await import("./fleet-rail");
+const { FleetRail, MAX_VISIBLE_ROWS, MIN_VISIBLE_ROWS, railScrollportHeight } =
+  await import("./fleet-rail");
+const { FleetRailFilterField, FleetRailOrderToggle, setRailFilter, setRailOrder } =
+  await import("./fleet-rail-controls");
 
 const UNITS: ReadonlyArray<{ id: string; name: string }> = [
   { id: "N-01", name: "Cedar Row" },
   { id: "N-02", name: "Maple Hollow" },
   { id: "N-03", name: "Mill Street" },
 ];
+
+/**
+ * One of each attention-first tier, plus a second red to prove the tiebreak:
+ * roster order is N-01 (red) N-02 (amber) N-03 (nominal, made to trend by the
+ * test) N-04 (plain nominal) N-05 (red) — so attention-first must read
+ * N-01, N-05, N-02, N-03, N-04, with the two reds kept in roster order.
+ */
+const ATTENTION_UNITS: ReadonlyArray<{ id: string; name: string; status: UnitStatus }> = [
+  { id: "N-01", name: "Cedar Row", status: "red" },
+  { id: "N-02", name: "Maple Hollow", status: "amber" },
+  { id: "N-03", name: "Mill Street", status: "nominal" },
+  { id: "N-04", name: "Alder Court", status: "nominal" },
+  { id: "N-05", name: "Birch Landing", status: "red" },
+];
+
+function attentionSnapshot(): FleetSnapshotMessage {
+  return {
+    t: "fleet_snapshot",
+    units: ATTENTION_UNITS.map((u, i) => ({
+      id: u.id,
+      name: u.name,
+      status: u.status,
+      battery: 80 - i,
+      pos: { lat: 44 + i / 100, lng: -121 - i / 100 },
+    })),
+  };
+}
 
 function snapshot(statuses: Partial<Record<string, UnitStatus>> = {}) {
   const msg: FleetSnapshotMessage = {
@@ -137,6 +162,12 @@ beforeEach(() => {
   // Module state, like the store's — the latch and the memo outlive a reset.
   resetTrendWatchForTests();
   renders.clear();
+  // Filter and order are module state too (fleet-rail-controls.tsx), same
+  // reasoning as the alert feed's own filter: an operator preference, not sim
+  // state, so it outlives a reset and has to be pinned back to its default
+  // here instead.
+  setRailFilter("");
+  setRailOrder("roster");
 });
 
 describe("FleetRail", () => {
@@ -164,7 +195,7 @@ describe("FleetRail", () => {
     render(<FleetRail />);
     // no telemetry yet, so there is no last-contact clause to state
     expect(screen.getAllByRole("link")[0]).toHaveAccessibleName(
-      "N-01, Cedar Row. Attention. Battery 80 percent.",
+      "N-01, Cedar Row. Attention. Battery 80%.",
     );
   });
 
@@ -305,6 +336,198 @@ describe("FleetRail", () => {
     expect(screen.getByText("Attention")).toBeInTheDocument();
   });
 
+  it("keeps the same per-row isolation once a filter has narrowed the list", () => {
+    useFleetStore.getState().applySnapshot(snapshot());
+    render(
+      <>
+        <FleetRailFilterField />
+        <FleetRail />
+      </>,
+    );
+    // "o": Cedar Row and Maple Hollow, not Mill Street — the row still on
+    // screen is N-01's, not N-03's.
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "o" } });
+    renders.clear();
+
+    act(() => {
+      useFleetStore.getState().applyTelemetry(telemetry("N-01", 65));
+    });
+
+    expect(renders.get("N-01")).toBe(1);
+    expect(renders.get("N-02") ?? 0).toBe(0);
+  });
+
+  it("keeps the same per-row isolation once the order is attention-first", () => {
+    // All three nominal: attention-first ties every unit at the same rank, so
+    // the order stays roster and a telemetry batch — which never touches
+    // `units` and so can never re-rank anyone — cannot move a row. (An alert
+    // is a different story: it can change a unit's rank and legitimately
+    // shift OTHER rows' index props, which is reordering doing its job, not a
+    // telemetry leak — that is not what this tripwire is about.)
+    useFleetStore.getState().applySnapshot(snapshot());
+    render(
+      <>
+        <FleetRailOrderToggle />
+        <FleetRail />
+      </>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Attention first" }));
+    renders.clear();
+
+    act(() => {
+      useFleetStore.getState().applyTelemetry(telemetry("N-01", 65));
+    });
+
+    expect(renders.get("N-01")).toBe(1);
+    expect(renders.get("N-02") ?? 0).toBe(0);
+    expect(renders.get("N-03") ?? 0).toBe(0);
+  });
+
+  it("filters by unit id, case-insensitively", async () => {
+    const user = userEvent.setup();
+    useFleetStore.getState().applySnapshot(snapshot());
+    render(
+      <>
+        <FleetRailFilterField />
+        <FleetRail />
+      </>,
+    );
+
+    await user.type(screen.getByRole("searchbox"), "n-02");
+    expect(screen.getAllByRole("link").map((r) => r.getAttribute("href"))).toEqual([
+      "/unit/N-02",
+    ]);
+  });
+
+  it("filters by home name, case-insensitively", async () => {
+    const user = userEvent.setup();
+    useFleetStore.getState().applySnapshot(snapshot());
+    render(
+      <>
+        <FleetRailFilterField />
+        <FleetRail />
+      </>,
+    );
+
+    await user.type(screen.getByRole("searchbox"), "CEDAR");
+    expect(screen.getAllByRole("link").map((r) => r.getAttribute("href"))).toEqual([
+      "/unit/N-01",
+    ]);
+  });
+
+  it("says what to do next when a filter matches nothing, without looking like a fault", async () => {
+    const user = userEvent.setup();
+    useFleetStore.getState().applySnapshot(snapshot());
+    render(
+      <>
+        <FleetRailFilterField />
+        <FleetRail />
+      </>,
+    );
+
+    await user.type(screen.getByRole("searchbox"), "zzz");
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+
+    const note = document.querySelector('[data-slot="region-note"]');
+    expect(note?.textContent).toBe("No units match “zzz.” Clear the search to see all 3.");
+
+    // the floor holds for a filtered-empty list exactly like an empty fleet
+    const scrollport = document.querySelector<HTMLElement>(
+      '[data-slot="fleet-rail-scrollport"]',
+    );
+    expect(scrollport?.style.height).toBe(`${UNIT_CARD_HEIGHT * MIN_VISIBLE_ROWS}px`);
+
+    // and it says what to do next, not just that there is nothing
+    await user.click(screen.getByRole("button", { name: "Clear the search" }));
+    expect(screen.getByRole("searchbox")).toHaveValue("");
+    expect(screen.getAllByRole("link")).toHaveLength(3);
+  });
+
+  it("defaults to roster order, and the toggle names both states plainly", () => {
+    useFleetStore.getState().applySnapshot(snapshot());
+    render(
+      <>
+        <FleetRailOrderToggle />
+        <FleetRail />
+      </>,
+    );
+
+    expect(screen.getByRole("button", { name: "Roster" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Attention first" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getAllByRole("link").map((r) => r.getAttribute("href"))).toEqual([
+      "/unit/N-01",
+      "/unit/N-02",
+      "/unit/N-03",
+    ]);
+  });
+
+  it("orders alert before attention before trending before nominal, roster order as the tiebreak", () => {
+    useFleetStore.getState().applySnapshot(attentionSnapshot());
+    render(
+      <>
+        <FleetRailOrderToggle />
+        <FleetRail />
+      </>,
+    );
+
+    act(() => {
+      feed("N-03", 20, { knee_L: 20 });
+    });
+    expect(screen.getByText("Trending")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Attention first" }));
+    expect(screen.getByRole("button", { name: "Attention first" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    // N-01 and N-05 are both red: rank ties on roster order, so N-01 (earlier
+    // in the snapshot) leads N-05, not the other way round.
+    expect(screen.getAllByRole("link").map((r) => r.getAttribute("href"))).toEqual([
+      "/unit/N-01",
+      "/unit/N-05",
+      "/unit/N-02",
+      "/unit/N-03",
+      "/unit/N-04",
+    ]);
+
+    // and switching back to Roster restores the snapshot's own order
+    fireEvent.click(screen.getByRole("button", { name: "Roster" }));
+    expect(screen.getAllByRole("link").map((r) => r.getAttribute("href"))).toEqual([
+      "/unit/N-01",
+      "/unit/N-02",
+      "/unit/N-03",
+      "/unit/N-04",
+      "/unit/N-05",
+    ]);
+  });
+
+  it("Escape clears the filter and keeps focus in the field", async () => {
+    const user = userEvent.setup();
+    useFleetStore.getState().applySnapshot(snapshot());
+    render(
+      <>
+        <FleetRailFilterField />
+        <FleetRail />
+      </>,
+    );
+
+    const field = screen.getByRole("searchbox");
+    await user.type(field, "maple");
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+
+    await user.keyboard("{Escape}");
+    expect(field).toHaveValue("");
+    expect(field).toHaveFocus();
+    expect(screen.getAllByRole("link")).toHaveLength(3);
+  });
+
   it("keeps one tab stop in the list however long it gets, and walks it with arrows", async () => {
     const user = userEvent.setup();
     useFleetStore.getState().applySnapshot(snapshot());
@@ -326,6 +549,37 @@ describe("FleetRail", () => {
     // and it does not wrap past the ends
     await user.keyboard("{ArrowDown}");
     await waitFor(() => expect(rows[2]).toHaveFocus());
+
+    await user.keyboard("{Home}");
+    await waitFor(() => expect(rows[0]).toHaveFocus());
+  });
+
+  it("keeps arrow/home/end traversal inside a filtered list, never on a row it removed", async () => {
+    const user = userEvent.setup();
+    useFleetStore.getState().applySnapshot(snapshot());
+    render(
+      <>
+        <FleetRailFilterField />
+        <FleetRail />
+      </>,
+    );
+
+    // "o": Cedar Row and Maple Hollow — Mill Street is filtered out
+    await user.type(screen.getByRole("searchbox"), "o");
+    const rows = screen.getAllByRole("link");
+    expect(rows.map((r) => r.getAttribute("href"))).toEqual(["/unit/N-01", "/unit/N-02"]);
+
+    rows[0]!.focus();
+    expect(rows[0]).toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+    await waitFor(() => expect(rows[1]).toHaveFocus());
+
+    // the filtered-out third row is not reachable — End is already here
+    await user.keyboard("{ArrowDown}");
+    await waitFor(() => expect(rows[1]).toHaveFocus());
+    await user.keyboard("{End}");
+    await waitFor(() => expect(rows[1]).toHaveFocus());
 
     await user.keyboard("{Home}");
     await waitFor(() => expect(rows[0]).toHaveFocus());
@@ -407,27 +661,5 @@ describe("rail height", () => {
     const mounted = screen.getAllByRole("link").length;
     expect(mounted).toBeGreaterThanOrEqual(MAX_VISIBLE_ROWS);
     expect(mounted).toBeLessThan(many);
-  });
-});
-
-describe("FleetUnitCount", () => {
-  it("says nothing until the fleet has reported in", () => {
-    const { container } = render(<FleetUnitCount />);
-    expect(container).toBeEmptyDOMElement();
-  });
-
-  it("counts the fleet, and agrees with itself about plurals", () => {
-    useFleetStore.getState().applySnapshot(snapshot());
-    const { rerender } = render(<FleetUnitCount />);
-    expect(screen.getByText("3 units")).toBeInTheDocument();
-
-    act(() => {
-      useFleetStore.getState().applySnapshot({
-        t: "fleet_snapshot",
-        units: [snapshot().units[0]!],
-      });
-    });
-    rerender(<FleetUnitCount />);
-    expect(screen.getByText("1 unit")).toBeInTheDocument();
   });
 });

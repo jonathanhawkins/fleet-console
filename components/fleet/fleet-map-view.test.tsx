@@ -140,7 +140,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
-const { default: FleetMapView } = await import("./fleet-map-view");
+const { default: FleetMapView, BASEMAP_UNAVAILABLE_NOTE } = await import(
+  "./fleet-map-view"
+);
 
 const REDUCED = "(prefers-reduced-motion: reduce)";
 
@@ -255,6 +257,133 @@ describe("FleetMapView — the ground before the map", () => {
       lastMap().fire("idle");
     });
     expect(frame()).toHaveAttribute("data-basemap", "ready");
+  });
+
+  describe("the sad path — a tile host that cannot be reached", () => {
+    it("keeps the fleet on the plate through a degraded reveal — markers are not the basemap's business", () => {
+      useFleetStore.getState().applySnapshot(snapshot());
+      render(<FleetMapView />);
+
+      act(() => {
+        lastMap().fire("style.load");
+      });
+      expect(frame().querySelectorAll(".fleet-marker")).toHaveLength(2);
+
+      act(() => {
+        lastMap().fire("error");
+      });
+
+      expect(frame()).toHaveAttribute("data-basemap-degraded", "true");
+      // The reveal and the marker DOM are independent effects: a degraded
+      // basemap neither adds nor removes a single marker.
+      expect(frame().querySelectorAll(".fleet-marker")).toHaveLength(2);
+      expect(
+        frame().querySelector<HTMLElement>('.fleet-marker[data-unit="N-07"]')?.dataset
+          .status,
+      ).toBe("warn");
+    });
+
+    it("reveals the canvas, degraded, on the map's own error event", () => {
+      render(<FleetMapView />);
+      expect(frame()).toHaveAttribute("data-basemap", "pending");
+
+      act(() => {
+        lastMap().fire("error");
+      });
+
+      // Whatever MapLibre managed to paint is shown rather than held back —
+      // the reveal still happens — but the region says the cartography failed.
+      expect(frame()).toHaveAttribute("data-basemap", "ready");
+      expect(frame()).toHaveAttribute("data-basemap-degraded", "true");
+      expect(screen.getByText(BASEMAP_UNAVAILABLE_NOTE)).toBeInTheDocument();
+    });
+
+    it("reveals the canvas, degraded, once the bounded timeout elapses with nothing else settling", () => {
+      vi.useFakeTimers();
+      try {
+        render(<FleetMapView />);
+        expect(frame()).toHaveAttribute("data-basemap", "pending");
+
+        // Short of the bound: still held, and still quiet about it.
+        act(() => {
+          vi.advanceTimersByTime(2_000);
+        });
+        expect(frame()).toHaveAttribute("data-basemap", "pending");
+        expect(screen.queryByText(BASEMAP_UNAVAILABLE_NOTE)).not.toBeInTheDocument();
+
+        act(() => {
+          vi.advanceTimersByTime(1_000);
+        });
+        expect(frame()).toHaveAttribute("data-basemap", "ready");
+        expect(frame()).toHaveAttribute("data-basemap-degraded", "true");
+        expect(screen.getByText(BASEMAP_UNAVAILABLE_NOTE)).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("never fires the timeout's reveal twice, and clears it on unmount", () => {
+      vi.useFakeTimers();
+      try {
+        const { unmount } = render(<FleetMapView />);
+        unmount();
+        // The pending timer is cleared on cleanup; letting it elapse anyway
+        // must not throw or reach a disposed component's setState.
+        expect(() => {
+          act(() => {
+            vi.advanceTimersByTime(5_000);
+          });
+        }).not.toThrow();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("keeps the clean reveal when load wins the race, even if error follows", () => {
+      render(<FleetMapView />);
+
+      act(() => {
+        lastMap().fire("load");
+      });
+      act(() => {
+        lastMap().fire("error");
+      });
+
+      expect(frame()).toHaveAttribute("data-basemap", "ready");
+      // load got there first: the other three branches find `revealed` set
+      // and this is not the degraded note's state to own.
+      expect(frame()).not.toHaveAttribute("data-basemap-degraded");
+      expect(screen.queryByText(BASEMAP_UNAVAILABLE_NOTE)).not.toBeInTheDocument();
+    });
+
+    it("keeps the clean reveal when idle wins the race, even if error follows", () => {
+      render(<FleetMapView />);
+
+      act(() => {
+        lastMap().fire("idle");
+      });
+      act(() => {
+        lastMap().fire("error");
+      });
+
+      expect(frame()).toHaveAttribute("data-basemap", "ready");
+      expect(frame()).not.toHaveAttribute("data-basemap-degraded");
+      expect(screen.queryByText(BASEMAP_UNAVAILABLE_NOTE)).not.toBeInTheDocument();
+    });
+
+    it("says nothing extra on the happy path: the note is the failed state's alone", () => {
+      render(<FleetMapView />);
+      expect(screen.queryByText(BASEMAP_UNAVAILABLE_NOTE)).not.toBeInTheDocument();
+
+      act(() => {
+        lastMap().fire("load");
+      });
+
+      expect(frame()).toHaveAttribute("data-basemap", "ready");
+      expect(screen.queryByText(BASEMAP_UNAVAILABLE_NOTE)).not.toBeInTheDocument();
+      // The privacy note keeps behaving normally in every reveal state.
+      expect(screen.getByText(APPROX_NOTE)).toBeInTheDocument();
+    });
   });
 
   it("switches rather than fades under prefers-reduced-motion", () => {

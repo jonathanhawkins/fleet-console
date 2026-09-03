@@ -14,7 +14,9 @@ import { expect, test } from "@playwright/test";
  * 3. keyboard traversal (Home/End) still lands on real, focusable rows;
  * 4. the N-07 storyline survives scale: the amber alert surfaces in the
  * feed and its row click-through reaches /unit/N-07 — the golden path's
- * first two beats, with 492 extra units in the room.
+ * first two beats, with 492 extra units in the room;
+ * 5. the search field is what makes 492 extra units tolerable: it finds the
+ * one unit in five hundred and gets there.
  *
  * Numbers (fps, commit costs, marker strategy) live in docs/perf.md; this
  * spec pins the *behaviors* so a regression cannot ship silently.
@@ -28,7 +30,7 @@ const MAX_MOUNTED_ROWS = 30;
 test("500 units: live fleet, bounded rail DOM, Home/End traversal, N-07 alert click-through", async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
 
   await page.goto("/");
 
@@ -75,4 +77,24 @@ test("500 units: live fleet, bounded rail DOM, Home/End traversal, N-07 alert cl
   await alertRow.click();
   await expect(page).toHaveURL(/\/unit\/N-07$/, { timeout: 10_000 });
   await expect(page.getByRole("heading", { name: "N-07" })).toBeVisible();
+
+  // --- Search finds the one unit in five hundred -----------------------------
+  // A fresh load: this beat is about the search field finding a needle in a
+  // 500-unit haystack, not about whatever the alert beat above left behind.
+  // By home name, not id: generated ids pad to 3 digits past unit 99 (N-009 …
+  // N-500), so a 2-digit core id like "N-08" also substring-matches N-080
+  // through N-089 at this scale. "Hubbard Farm" is a handcrafted name outside
+  // both generated word lists (sim/engine/fleet.ts) — unique by construction,
+  // and only reachable by name, not by an id anyone could guess.
+  await page.goto("/");
+  await expect(page.getByText(/500 units/i)).toBeVisible({ timeout: 15_000 });
+
+  const search = page.getByRole("searchbox", { name: "Search units" });
+  await search.fill("Hubbard Farm");
+  await expect(page.getByText("1 of 500")).toBeVisible();
+  await expect(rows).toHaveCount(1);
+
+  await rows.first().click();
+  await expect(page).toHaveURL(/\/unit\/N-08$/, { timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "N-08" })).toBeVisible();
 });

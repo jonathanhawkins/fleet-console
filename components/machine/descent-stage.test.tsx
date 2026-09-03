@@ -793,3 +793,61 @@ describe("DescentStage — the departing snapshot", () => {
     expect(store().session?.walkLines).toHaveLength(2);
   });
 });
+
+describe("DescentStage — the verdict takes focus and announces itself", () => {
+  it("focuses the verdict section, not RETURN, naming the joint and the anomaly", async () => {
+    await toVerdict();
+
+    const section = document.querySelector('[data-descent-layer] [data-slot="verdict-card"]');
+    expect(section).not.toBeNull();
+    expect(section).toHaveFocus();
+    expect(section).toHaveAttribute("tabindex", "-1");
+    expect(section).toHaveAccessibleName(/KNEE_L/);
+    expect(section).toHaveAccessibleName(/gain anomaly/i);
+
+    // RETURN exists and is unharmed by the retarget — it simply is not what
+    // grabbed focus on arrival.
+    const returnButton = screen.getByRole("button", { name: /return to console/i });
+    expect(document.activeElement).not.toBe(returnButton);
+  });
+
+  /**
+   * The section is a focus target, not a focus *stop*: `tabIndex={-1}` keeps
+   * it out of the natural Tab sequence, so once it has been focused
+   * programmatically, Tab has to carry on into the card exactly as it would
+   * have if nothing had autofocused at all. A section that swallowed focus
+   * here would be a second, quieter regression of the same bug.
+   */
+  it("still lets Tab reach into the card normally from the freshly-focused section", async () => {
+    const user = userEvent.setup();
+    await toVerdict();
+
+    const layer = document.querySelector<HTMLElement>("[data-descent-layer]")!;
+    expect(document.querySelector('[data-slot="verdict-card"]')).toHaveFocus();
+
+    await user.tab();
+    expect(layer.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toHaveAccessibleName(/minimize verdict/i);
+  });
+
+  /**
+   * The overlay's existing wrap-at-the-edges trap (descent-stage.tsx) is
+   * unrelated to which element autofocuses — this is the regression check
+   * that retargeting the initial focus did not also loosen the trap around
+   * it. `first` here is the header's CLOSE control, since this session's link
+   * never dropped and the header prints no "Return to console" ahead of it.
+   */
+  it("still wraps at the edges: Shift+Tab from the first control reaches the last, never outside the layer", async () => {
+    const user = userEvent.setup();
+    await toVerdict();
+
+    const layer = document.querySelector<HTMLElement>("[data-descent-layer]")!;
+    const close = screen.getByRole("button", { name: /close diagnostic view/i });
+    close.focus();
+    expect(close).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(layer.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(close);
+  });
+});

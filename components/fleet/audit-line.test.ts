@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { type AuditEntry, type AuditKind } from "@/lib/stores";
-import { AUDIT_TAG, auditLine } from "./audit-line";
+import { type AuditEntry } from "@/lib/stores";
+import { AUDIT_KINDS, AUDIT_TAG, auditLine } from "./audit-line";
 
 /**
  * The session log is a record, so the default is to print what the store
@@ -123,20 +123,9 @@ describe("auditLine", () => {
 });
 
 describe("AUDIT_TAG", () => {
-  const kinds: AuditKind[] = [
-    "alert-raised",
-    "alert-acked",
-    "escalation",
-    "resolution",
-    "diag-start",
-    "diag-verdict",
-    "command-accepted",
-    "command-complete",
-    "command-failed",
-  ];
-
   it("names every kind the store can append — no unlabelled row is possible", () => {
-    for (const kind of kinds) {
+    expect(AUDIT_KINDS.length).toBeGreaterThan(0);
+    for (const kind of AUDIT_KINDS) {
       expect(AUDIT_TAG[kind].label).toBeTruthy();
     }
   });

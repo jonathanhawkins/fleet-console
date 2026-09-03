@@ -115,16 +115,18 @@ export default defineConfig({
   projects: [
     {
       /**
-       * The desk lane. Three specs: the golden path (the walk that IS the
+       * The desk lane. Four specs: the golden path (the walk that IS the
        * product), the leave-and-return loop it does not cover — an operator
-       * stepping out of a running scan and coming back to it — and the
+       * stepping out of a running scan and coming back to it — the
        * recalibration branch it deliberately does not take, which is
-       * the maneuver that earns the dispatch. They share the lane because they
-       * share a build and a viewport; they are separate files because one of
-       * them is the demo and the other two are properties of it.
+       * the maneuver that earns the dispatch, and the map's failure path —
+       * a blocked tile host, which needs nothing about the storyline and so
+       * runs against the same plain build as the other three. They share the
+       * lane because they share a build and a viewport; they are separate
+       * files because one of them is the demo and the rest are properties of it.
        */
       name: "chromium",
-      testMatch: /(golden-path|leave-return|recalibrate)\.spec\.ts/,
+      testMatch: /(golden-path|leave-return|recalibrate|map-degraded|error-states)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         // Override the device preset's 720p: tall enough that all eight rail

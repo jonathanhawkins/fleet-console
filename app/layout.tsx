@@ -18,12 +18,39 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const DESCRIPTION =
+  "Eight home humanoid robots, joint telemetry at 10 Hz, and one incident that " +
+  "walks an operator from a calm map into the machine's own diagnostics. " +
+  "A design and engineering demo; all data is simulated.";
+
+/**
+ * `metadataBase` is what turns the file-convention images into the absolute
+ * URLs a link unfurler needs — without it Next emits a relative path and every
+ * preview card renders empty. The description is the product in one sentence
+ * rather than the footer disclaimer, because this string is what search
+ * results and preview cards show; the disclaimer still closes it, since the
+ * one thing a card must not do is imply the fleet is real.
+ */
 export const metadata: Metadata = {
+  metadataBase: new URL("https://fleet-console.pages.dev"),
   title: {
     default: "Fleet Console",
     template: "%s · Fleet Console",
   },
-  description: "A design and engineering demo. All data is simulated.",
+  description: DESCRIPTION,
+  applicationName: "Fleet Console",
+  openGraph: {
+    type: "website",
+    siteName: "Fleet Console",
+    title: "Fleet Console",
+    description: DESCRIPTION,
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Fleet Console",
+    description: DESCRIPTION,
+  },
 };
 
 export const viewport: Viewport = {

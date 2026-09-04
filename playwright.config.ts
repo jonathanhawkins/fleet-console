@@ -120,15 +120,17 @@ export default defineConfig({
        * a running scan and coming back to it — the recalibration branch it
        * deliberately does not take, which is the maneuver that earns the
        * dispatch, the map's failure path (a blocked tile host, which needs
-       * nothing about the storyline), and the accessibility walk: axe on each
+       * nothing about the storyline), the accessibility walk (axe on each
        * surface the path opens, plus one traversal driven only by the
-       * keyboard. They share the lane because they share a build and a
+       * keyboard), and the responsive check, which resizes itself and fails on
+       * anything cut off past the viewport with no scroller to reach it.
+       * They share the lane because they share a build and a
        * viewport; they are separate files because one of them is the demo and
        * the rest are properties of it.
        */
       name: "chromium",
       testMatch:
-        /(golden-path|leave-return|recalibrate|map-degraded|error-states|accessibility)\.spec\.ts/,
+        /(golden-path|leave-return|recalibrate|map-degraded|error-states|accessibility|responsive)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         // Override the device preset's 720p: tall enough that all eight rail

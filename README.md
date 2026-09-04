@@ -107,6 +107,23 @@ flowchart TD
   the only door to shadcn; a `no-restricted-imports` rule fails the build if
   app code reaches past it.
 
+### If you only read four files
+
+- **[lib/transport/workerTransport.ts](lib/transport/workerTransport.ts)** —
+  the boundary. Where zod validates, where "open" is defined as the first
+  message that parses rather than the first `postMessage`, and where a worker
+  that never answers becomes a reported status instead of a hang.
+- **[components/fleet/telemetry-strip/strip-draw.ts](components/fleet/telemetry-strip/strip-draw.ts)**
+  — the hot path. Eighteen instruments, one rAF loop, ring buffers outside
+  React, and a draw that skips entirely when no sample arrived.
+- **[components/machine/wireframe-elevation.tsx](components/machine/wireframe-elevation.tsx)**
+  — the descent's hardest surface: the robot's own extracted edge set,
+  projected and bucketed onto a luminance ladder by arithmetic, no three.js,
+  ~16 KB of JSON. Split into a model, a painter and a component.
+- **[app/styles/tokens.css](app/styles/tokens.css)** — the two worlds. Every
+  colour in the app resolves from here; nothing downstream knows which space
+  it is in.
+
 ## Receipts
 
 Measured on the static export, the exact artifact that deploys. The budget
@@ -115,8 +132,8 @@ summary; the numbers below are copied from that output.
 
 | Budget                                   | Measured                                 | Verdict |
 | ---------------------------------------- | ---------------------------------------- | ------- |
-| Fleet page initial JS < 200 KB gz        | **178.1 KB**                             | PASS    |
-| Unit page initial JS < 200 KB gz         | **187.1 KB**                             | PASS    |
+| Fleet page initial JS < 200 KB gz        | **183.0 KB**                             | PASS    |
+| Unit page initial JS < 200 KB gz         | **192.0 KB**                             | PASS    |
 | 60 fps during the descent                | p95 frame 9.2 ms, 1 of 974 over 16.7 ms  | PASS    |
 | Interaction latency < 100 ms             | Run-diagnostic press → feedback 1.3 ms   | PASS    |
 | Component view (three + GLB) < 500 KB gz | 321.7 KB, lazy                           | PASS    |
@@ -124,8 +141,12 @@ summary; the numbers below are copied from that output.
 
 Lighthouse is a gate, not a quote: `node scripts/lighthouse.mjs` runs the
 desktop preset against `/`, `/unit/N-01` and `/system` on the same export and
-fails under performance 90 or any other category under 100. All three score
-**100** in every category. `/system` is in the list because it is the only
+fails under performance 90 or any other category under 100. Accessibility,
+best practices and SEO are **100** on all three; performance is 100 on `/` and
+`/system` and 98 on `/unit/N-01`, whose eighteen live instruments put real work
+on the main thread at load. Performance is the one number quoted rather than
+pinned — total blocking time on this page swings with whatever else the machine
+is doing, which is also why CI reports it instead of gating it. `/system` is in the list because it is the only
 route that renders machine space, so half the design thesis would otherwise
 never be audited; adding it found three real defects on its first run. CI runs
 the script after the budgets on every push, gating the three deterministic
@@ -208,12 +229,41 @@ oversight:
   audit trail has no actor field. A real deployment needs authentication,
   per-user attribution, and a handover between shifts, because the audit
   trail's whole value is who did what.
-- **Nothing is durable.** Every store is in memory, so a reload loses the
-  incident record and the acknowledgements. The incident report exists to be
-  printed and handed on; behind it a real console needs a server that keeps it.
+- **Nothing is durable past the tab.** A reload is handled — the storyline
+  resumes where it left off and the incidents come back with it, out of
+  `sessionStorage` — but that is one browser tab remembering one sitting, not
+  persistence. Close the tab and the record is gone; open the demo on another
+  machine and there is nothing to see. The incident report exists to be printed
+  and handed on; behind it a real console needs a server that keeps it.
+- **One third-party origin, and it is the pretty one.** The basemap's tiles
+  come from `tiles.openfreemap.org` — the only external request the app makes.
+  A network that blocks it, or a host having a slow morning, is handled rather
+  than ignored: a 2.5 s timeout and MapLibre's own error both flip the map to a
+  degraded state that keeps every marker, says `Base map unavailable. Fleet
+  positions are unaffected.`, and leaves the rail and the feed untouched — the
+  cartography is the only thing missing, and `e2e/map-degraded.spec.ts` proves
+  it with the host blocked. What it is not is a *fallback*: there is no bundled
+  basemap, so a reviewer behind a strict proxy sees the fleet on a blank ground
+  rather than on streets.
 - **No fleet-scale write path.** Commands go to one unit at a time, except the
   firmware rollout, which is deliberately the exception that shows why
   fleet-scoped commands need their own confirmation and their own audit.
+
+## About this repository
+
+The history here starts at one large commit, and that is worth explaining
+rather than leaving to inference. This app was built over about two weeks in a
+private repository whose history accumulated third-party visual reference
+captures — other people's design work, gathered while studying it, and not mine
+to publish. Rather than rewrite that history I re-initialised the repository
+from the working tree, so the public history begins at the first release and
+the reference material never left my machine. `docs/images/REFERENCES.md`
+describes what those references were, in words, along with the rule that
+nothing in this app copies a frame, an asset, or a name from any of them.
+
+The commits since are the real thing: each one is a pass over a finished
+build — a scale receipt, an accessibility gate, a responsive defect, a
+dependency dropped — and they read that way.
 
 ## Run it
 

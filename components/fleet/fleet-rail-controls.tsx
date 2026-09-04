@@ -123,7 +123,10 @@ export function FleetUnitCount() {
   const query = filterQuery.trim().toLowerCase();
   if (!query) {
     return (
-      <span className="text-label text-ink-soft uppercase">
+      // Hidden on a phone, where it is the one thing in this header a reader
+      // can get by counting the list directly underneath it. The filtered
+      // count below always shows: "3 of 8" is not derivable from the screen.
+      <span className="hidden text-label text-ink-soft uppercase sm:inline">
         {unitIds.length} {unitIds.length === 1 ? "unit" : "units"}
       </span>
     );
@@ -224,7 +227,7 @@ export function FleetRailOrderToggle() {
 /** The card header's action slot: search, order, and what's on screen. */
 export function FleetRailControls() {
   return (
-    <div className="flex items-center gap-2 sm:gap-3">
+    <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1.5 sm:gap-x-3">
       <FleetRailFilterField />
       <FleetRailOrderToggle />
       <FleetUnitCount />

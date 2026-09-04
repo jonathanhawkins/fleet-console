@@ -10,3 +10,20 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
+  # What this buys and what it does not, stated plainly.
+  #
+  # Origins: connect-src and img-src carry the one third-party origin in the
+  # app (the basemap's tiles, glyphs and sprites); everything else is
+  # same-origin, so no other host can be reached for anything. blob: is
+  # MapLibre's worker and its tile bitmaps; the sim's own worker is a bundled
+  # same-origin chunk.
+  #
+  # 'unsafe-inline' on script-src is not a shortcut — it is what a static
+  # export costs. Next streams the RSC payload as a run of inline
+  # `self.__next_f.push(...)` blocks whose hashes change every build, and with
+  # no server there is no nonce to mint. So this policy stops a third-party
+  # script being *loaded*, and does not stop one being *injected*. style-src is
+  # inline for the same class of reason: framework-inlined critical CSS, plus
+  # the canvas token probe that writes a style to read a computed value back.
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://tiles.openfreemap.org; connect-src 'self' https://tiles.openfreemap.org; manifest-src 'self'
+  Permissions-Policy: accelerometer=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), microphone=(), midi=(), payment=(), usb=()

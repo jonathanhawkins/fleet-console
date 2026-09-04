@@ -1,8 +1,8 @@
 # Performance receipts
 
 > Budget rows below are the output of `node scripts/check-budgets.mjs` on the
-> static export built 2026-09-03 (`/` 178.1 KB gz over 14 scripts,
-> `/unit/N-01` 187.1 KB gz over 16). The same check runs at the end of every
+> static export built 2026-09-04 (`/` 183.0 KB gz over 14 scripts,
+> `/unit/N-01` 192.0 KB gz over 16). The same check runs at the end of every
 > `pnpm e2e` and in CI, so these two numbers are enforced rather than
 > remembered. Two moves account for most of the growth from the first
 > 173.8 / 175.1 KB build: the incident-history, cohort and trend-watch work
@@ -29,8 +29,8 @@ the PRD §7 line itself, not current usage.
 
 | Budget | Measured | Verdict |
 | --- | --- | --- |
-| Fleet page initial JS < 200 KB gz | **178.1 KB gz** (modern browsers; 14 files) | **PASS** |
-| Unit page initial JS < 200 KB gz | **187.1 KB gz** (16 files) | **PASS** |
+| Fleet page initial JS < 200 KB gz | **183.0 KB gz** (modern browsers; 14 files) | **PASS** |
+| Unit page initial JS < 200 KB gz | **192.0 KB gz** (16 files) | **PASS** |
 | 60 fps during the descent | p95 frame **9.2 ms**, 1 of 974 frames > 16.7 ms (0.1%) | **PASS** |
 | Interaction latency < 100 ms | Run-diagnostic press → visible feedback **1.3 ms** | **PASS** |
 | Component view (three + GLB) < 500 KB gz | 249.4 + 72.3 = **321.7 KB gz**, lazy | **PASS** |
@@ -45,8 +45,8 @@ request it).
 
 | Route | Next "First Load JS" | Measured JS (gz) | CSS (gz) | HTML (gz) |
 | --- | --- | --- | --- | --- |
-| `/` (fleet) | 190 kB | **178.1 KB** | 15.0 KB | 4.5 KB |
-| `/unit/[id]` | 198 kB | **187.1 KB** | 15.0 KB | 7.4 KB |
+| `/` (fleet) | 190 kB | **183.0 KB** | 15.0 KB | 4.5 KB |
+| `/unit/[id]` | 198 kB | **192.0 KB** | 15.0 KB | 7.4 KB |
 | legacy-only polyfill (`noModule`) | — | 38.5 KB | — | — |
 
 `zod/mini` holds both routes under budget: the schema layer and worker-host protocol
@@ -106,7 +106,7 @@ golden-path run.
 
 The Lighthouse claim is no longer a table typed into this file. It is
 `scripts/lighthouse.mjs`: desktop preset, the static export served by
-`scripts/serve-static.mjs --gzip`, against `/` and `/unit/N-01`, on Playwright's
+`scripts/serve-static.mjs --gzip`, against `/`, `/unit/N-01` and `/system`, on Playwright's
 Chromium with SwiftShader GL. It exits 1 under **performance 90** or under **100** on
 accessibility, best practices or SEO. CI reports rather than gates performance, since a
 shared runner's software-WebGL main thread swings total-blocking-time by an order of
@@ -190,6 +190,13 @@ receipts is the worker path.
 Kept for the method — most of it a **paired A/B in one process**, so machine drift
 cancels rather than landing in the delta — stated once each, newest number first where a
 figure above superseded an earlier one.
+
+**Bundle: what the reload contract cost.** Resuming a reloaded console spends
+**+4.9 KB gz** on both routes: the persisted sitting is zod-validated on the way
+out of `sessionStorage` (storyline-session.ts), which pulls a little more of
+`zod/mini` into the initial payload, and React 19.1 → 19.2 accounts for the
+rest. Bought deliberately — the alternative was a refresh silently destroying
+the incident the whole golden path exists to produce.
 
 **Bundle: dropping `d3-scale`.** `stripScales()` imported one function,
 `scaleLinear`, and the only thing ever called on its result was `scale(value)`

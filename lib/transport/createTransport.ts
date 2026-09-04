@@ -1,4 +1,5 @@
 import { type TelemetryTransport } from "./types";
+import { readStorylineResumeMs } from "@/lib/session/storyline-session";
 import { WorkerTransport } from "./workerTransport";
 import { DEFAULT_WS_URL, WsTransport } from "./wsTransport";
 
@@ -85,6 +86,10 @@ export function createTransport(): TelemetryTransport {
         nav: Object.keys(nav).length > 0 ? nav : undefined,
         cohort: Object.keys(cohort).length > 0 ? cohort : undefined,
         diagScale: envFloat(process.env.NEXT_PUBLIC_SIM_DIAG_SCALE),
+        // Only the worker resumes. The dev ws sim is a separate process whose
+        // clock never stopped, so a reloaded page there rejoins a run already
+        // in progress — there is nothing to wind forward.
+        resumeAtMs: readStorylineResumeMs(),
       });
     }
     default:

@@ -74,7 +74,13 @@ export function ConsoleCard({
       {hasHeader ? (
         <header
           className={cn(
-            "flex shrink-0 items-center justify-between gap-4 border-b border-line",
+            // flex-wrap, because the action slot is caller-supplied and a
+            // header cannot know how wide it will be: the fleet rail's search
+            // + order + count is wider than a phone, and without this it was
+            // clipped rather than wrapped — the count sat entirely off-screen
+            // with nothing to scroll it back.
+            "flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2",
+            "border-b border-line",
             flush
               ? "px-5 py-3.5 machine:px-4 machine:py-2.5"
               : "mb-5 pb-3 machine:mb-3 machine:pb-2",

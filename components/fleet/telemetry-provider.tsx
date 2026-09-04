@@ -7,10 +7,24 @@ import {
   type ConnectionStatusSource,
   type TelemetryTransport,
 } from "@/lib/transport";
+import {
+  markIncidents,
+  markStorylinePosition,
+  readPersistedIncidents,
+  readStorylineResumeMs,
+} from "@/lib/session/storyline-session";
+import { useIncidentStore, type IncidentRecord } from "@/lib/stores";
 import { startStatusRecorder } from "./status-history";
 import { setCommandTransport } from "./telemetry-command";
 
 const isDev = process.env.NODE_ENV !== "production";
+
+/**
+ * How often the storyline position is written down. A second is finer than
+ * anyone can perceive in a resume and coarse enough that the write is free;
+ * losing up to a second of story on a reload is not a thing a reader can see.
+ */
+const POSITION_INTERVAL_MS = 1000;
 
 /**
  * What `createTransport()` throwing becomes: a transport that never delivers
@@ -72,7 +86,37 @@ export function TelemetryProvider() {
     setCommandTransport(transport);
     const unbind = bindTransport(transport);
     const stopRecorder = startStatusRecorder();
+
+    /**
+     * The reload contract, both halves of it.
+     *
+     * `createTransport()` has already told the sim where to pick up (the same
+     * number read here); this keeps that number current as the run advances,
+     * and re-hydrates the incidents that belong to it. Restoring the history
+     * *after* the transport is bound is deliberate — a fresh snapshot restates
+     * the fleet but never touches the incident store, so there is no race
+     * between the two.
+     */
+    const resumedFrom = readStorylineResumeMs();
+    const openedAt = Date.now();
+
+    // The stored shape is validated field by field on the way in
+    // (storyline-session.ts); `calibration` alone rides through opaquely,
+    // which is what this cast is for and all it covers.
+    const restored = readPersistedIncidents() as IncidentRecord[];
+    if (restored.length > 0) useIncidentStore.setState({ history: restored });
+
+    const tick = window.setInterval(() => {
+      markStorylinePosition(resumedFrom + (Date.now() - openedAt));
+    }, POSITION_INTERVAL_MS);
+
+    const unwatchHistory = useIncidentStore.subscribe((state, prev) => {
+      if (state.history !== prev.history) markIncidents(state.history);
+    });
+
     return () => {
+      window.clearInterval(tick);
+      unwatchHistory();
       stopRecorder();
       setCommandTransport(null);
       unbind();

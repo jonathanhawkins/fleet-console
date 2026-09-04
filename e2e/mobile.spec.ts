@@ -33,9 +33,16 @@ test("phone: fleet → tap N-07 → descent → verdict sheet → return with in
 
   // --- Fleet ----------------------------------------------------------------
   await page.goto("/");
-  await expect(page.getByText(/8 units/i)).toBeVisible();
   await expect(page.locator('[data-slot="unit-card"]')).toHaveCount(8);
   await expectNoHorizontalScroll(page, "fleet");
+
+  // The rail header's unit count is deliberately absent at this width: it
+  // restates the list immediately below it, and keeping it cost more than it
+  // was worth — the order toggle beside it was being sliced off the screen
+  // (fleet-rail-controls.tsx, e2e/responsive.spec.ts). The controls that carry
+  // a decision stay.
+  await expect(page.getByRole("button", { name: "Roster" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Attention first" })).toBeVisible();
 
   // The map is full-bleed below `sm`: it runs to both edges of the 390px
   // viewport rather than sitting inside the page gutter.

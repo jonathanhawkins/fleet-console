@@ -35,6 +35,8 @@ export interface WorkerTransportOptions {
   cohort?: SimWorkerInit["cohort"];
   /** Diag choreography compression; 0.1 = command → verdict 10x faster. */
   diagScale?: number;
+  /** Storyline ms to resume at — a reload picking the run back up. */
+  resumeAtMs?: number;
   /** Injectable worker constructor for tests; defaults to the bundled sim worker. */
   workerFactory?: () => WorkerLike;
   /**
@@ -102,6 +104,7 @@ export class WorkerTransport implements TelemetryTransport, ConnectionStatusSour
       nav: options.nav,
       cohort: options.cohort,
       diagScale: options.diagScale,
+      resumeAtMs: options.resumeAtMs,
     };
     this.openTimeoutMs = options.openTimeoutMs ?? DEFAULT_OPEN_TIMEOUT_MS;
     this.factory =

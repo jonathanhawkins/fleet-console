@@ -87,6 +87,13 @@ export const simWorkerInitSchema = z.object({
   nav: z.optional(navOverrideSchema),
   cohort: z.optional(cohortOverrideSchema),
   diagScale: z.optional(z.number().check(z.positive())),
+  /**
+   * Storyline ms to arrive at, for a console that is resuming rather than
+   * starting. The engine is wound forward *before* the greeting, so the
+   * snapshot the console receives is already the resumed fleet — no flash of
+   * t=0, and no second round trip to correct it.
+   */
+  resumeAtMs: z.optional(nonNegativeMs),
 });
 export type SimWorkerInit = z.infer<typeof simWorkerInitSchema>;
 
@@ -158,7 +165,10 @@ export function startSimWorkerHost(
       // `pnpm sim`. RESET_SIM (a cmd) is the in-run replay; this replaces
       // the engine wholesale.
       stopTicking();
-      startedAt = now();
+      // A resume moves the run's origin back, so `now() - startedAt` picks up
+      // where the last page left off instead of at zero.
+      const resumeAtMs = msg.resumeAtMs ?? 0;
+      startedAt = now() - resumeAtMs;
       engine = createSimEngine({
         seed: msg.seed,
         unitCount: msg.units,
@@ -171,6 +181,12 @@ export function startSimWorkerHost(
             : scaleDiagTimeline(DEFAULT_DIAG_TIMELINE, msg.diagScale),
         startTimeMs: startedAt,
       });
+
+      // Wind the storyline forward with the output discarded: advance() skips
+      // stale telemetry across a long gap but still fires every beat inside
+      // it, so the engine ends up holding the alerts and statuses the run had
+      // at that instant — which is exactly what the greeting below reads.
+      if (resumeAtMs > 0) engine.advance(resumeAtMs);
 
       // Greet exactly like the ws server greets a connection: snapshot, then
       // this run's alerts, then any in-flight scan's emitted prefix, then any

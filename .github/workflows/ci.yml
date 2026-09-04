@@ -70,6 +70,35 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  # The 500-unit receipt. Its own job rather than a step in `e2e`, because it
+  # builds a second artifact (NEXT_PUBLIC_SIM_UNITS=500) and there is no reason
+  # to make the deploy wait behind it — but it is in CI at all because the
+  # README prints its numbers as a PASS, and a receipt nothing re-measures is
+  # the one row in that table taken on trust.
+  stress:
+    name: 500-unit scale
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e:stress
+        env:
+          CI: "1"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: stress-traces
+          path: test-results/
+          retention-days: 7
+
   deploy:
     name: Deploy static export
     runs-on: ubuntu-latest

@@ -160,6 +160,67 @@ describe("worker host — init and telemetry cadence", () => {
   });
 });
 
+describe("worker host — resuming a reloaded console", () => {
+  it("arrives already wound forward: the greeting carries the alerts of that instant", () => {
+    const fresh = new FakePort();
+    startSimWorkerHost(fresh);
+    fresh.emit({ type: "init", seed: 42, timeline: FAST_TIMELINE });
+    // A run that has just started has nothing to report yet.
+    expect(alertsOf(fresh.out)).toHaveLength(0);
+
+    const resumed = new FakePort();
+    startSimWorkerHost(resumed);
+    resumed.emit({
+      type: "init",
+      seed: 42,
+      timeline: FAST_TIMELINE,
+      resumeAtMs: FAST_TIMELINE.redAtMs + 1_000,
+    });
+
+    // The greeting itself — before a single tick — already carries the fleet
+    // as it stood at that moment. That is the whole contract: a reload must
+    // not show a calm fleet for a beat before catching up.
+    const snapshot = resumed.out[0] as { t: string };
+    expect(snapshot.t).toBe("fleet_snapshot");
+    expect(alertsOf(resumed.out).length).toBeGreaterThan(0);
+  });
+
+  it("keeps ticking from the resumed instant, not from zero", () => {
+    const port = new FakePort();
+    startSimWorkerHost(port);
+    port.emit({ type: "init", seed: 42, timeline: FAST_TIMELINE, resumeAtMs: 5_000 });
+    port.out.length = 0;
+
+    vi.advanceTimersByTime(300);
+    const batches = telemetryFor(port.out, "N-01");
+    expect(batches.length).toBeGreaterThan(0);
+    // Wire time is anchored to the run's origin, which the resume moved back —
+    // so the first batch after a resume is ~5 s in, not ~0.
+    const first = batches[0]!;
+    expect(first.ts).toBeGreaterThan(0);
+  });
+
+  it("treats a missing or zero resume as an ordinary fresh run", () => {
+    const withZero = new FakePort();
+    startSimWorkerHost(withZero);
+    withZero.emit({ type: "init", seed: 42, timeline: FAST_TIMELINE, resumeAtMs: 0 });
+
+    const without = new FakePort();
+    startSimWorkerHost(without);
+    without.emit({ type: "init", seed: 42, timeline: FAST_TIMELINE });
+
+    expect(JSON.stringify(withZero.out)).toBe(JSON.stringify(without.out));
+  });
+
+  it("drops an init whose resume is negative rather than starting a broken run", () => {
+    const port = new FakePort();
+    startSimWorkerHost(port);
+    port.emit({ type: "init", seed: 42, resumeAtMs: -1 });
+    // Invalid at the schema, so no engine was created and nothing is emitted.
+    expect(port.out).toHaveLength(0);
+  });
+});
+
 describe("worker host — commands", () => {
   it("RUN_DIAGNOSTIC streams the full choreography: scan_start, walks, channels, flag, verdict", () => {
     const port = new FakePort();

@@ -14,9 +14,11 @@
     display: grid;
     gap: 1.25rem;
     grid-template-columns: minmax(0, 1fr);
-    /* The stacked rail row caps at 75dvh: at 500 units content height is the
-       whole fleet. Exact at the 768px floor — 8 rows still render uncut. */
-    grid-template-rows: minmax(20rem, 45vh) minmax(15rem, 75dvh) minmax(11rem, auto);
+    /* The stacked rail row is content-sized. A definite max (it was 75dvh)
+       gives the row a growth limit the grid will fill with free space, and
+       since the scrollport caps itself at MAX_VISIBLE_ROWS the surplus landed
+       inside the card as empty greige — 130px of it at the 768px floor. */
+    grid-template-rows: minmax(20rem, 45vh) minmax(15rem, max-content) minmax(11rem, auto);
     grid-template-areas:
       "map"
       "rail"

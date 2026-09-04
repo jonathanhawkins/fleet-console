@@ -159,7 +159,12 @@ describe("ScanStatusBar — the spoken channel", () => {
       <ScanStatusBar
         session={session({
           channels: [ch("knee_L"), ch("knee_R")],
-          flag: { k: "flag", joint: "knee_L", component: "actuator_A07", anomaly: "gain" },
+          flag: {
+            k: "flag",
+            joint: "knee_L",
+            component: "actuator_A07",
+            anomaly: "gain",
+          },
         })}
         link="open"
         phase="scanning"
@@ -176,7 +181,12 @@ describe("ScanStatusBar — the spoken channel", () => {
       <ScanStatusBar
         session={session({
           channels: [ch("knee_L"), ch("knee_R"), ch("ankle_L")],
-          flag: { k: "flag", joint: "knee_L", component: "actuator_A07", anomaly: "gain" },
+          flag: {
+            k: "flag",
+            joint: "knee_L",
+            component: "actuator_A07",
+            anomaly: "gain",
+          },
         })}
         link="open"
         phase="scanning"

@@ -132,8 +132,8 @@ summary; the numbers below are copied from that output.
 
 | Budget                                   | Measured                                 | Verdict |
 | ---------------------------------------- | ---------------------------------------- | ------- |
-| Fleet page initial JS < 200 KB gz        | **183.0 KB**                             | PASS    |
-| Unit page initial JS < 200 KB gz         | **192.0 KB**                             | PASS    |
+| Fleet page initial JS < 200 KB gz        | **183.2 KB**                             | PASS    |
+| Unit page initial JS < 200 KB gz         | **192.2 KB**                             | PASS    |
 | 60 fps during the descent                | p95 frame 9.2 ms, 1 of 974 over 16.7 ms  | PASS    |
 | Interaction latency < 100 ms             | Run-diagnostic press → feedback 1.3 ms   | PASS    |
 | Component view (three + GLB) < 500 KB gz | 321.7 KB, lazy                           | PASS    |
@@ -142,11 +142,12 @@ summary; the numbers below are copied from that output.
 Lighthouse is a gate, not a quote: `node scripts/lighthouse.mjs` runs the
 desktop preset against `/`, `/unit/N-01` and `/system` on the same export and
 fails under performance 90 or any other category under 100. Accessibility,
-best practices and SEO are **100** on all three; performance is 100 on `/` and
-`/system` and 98 on `/unit/N-01`, whose eighteen live instruments put real work
-on the main thread at load. Performance is the one number quoted rather than
-pinned — total blocking time on this page swings with whatever else the machine
-is doing, which is also why CI reports it instead of gating it. `/system` is in the list because it is the only
+best practices and SEO are **100** on all three, every run. Performance is 100
+on `/` and `/system`, and moves between 98 and 100 on `/unit/N-01`, whose
+eighteen live instruments put real work on the main thread at load: the same
+build measured 445 ms of total blocking time on a busy machine and 52 ms on an
+idle one. That is why the gate is 90 rather than 100 there, and why CI reports
+performance instead of failing on it. `/system` is in the list because it is the only
 route that renders machine space, so half the design thesis would otherwise
 never be audited; adding it found three real defects on its first run. CI runs
 the script after the budgets on every push, gating the three deterministic
@@ -158,7 +159,7 @@ docs/perf.md, are the receipt —
 and [docs/evidence/lighthouse/system.json](docs/evidence/lighthouse/system.json)
 (load any of them in the Lighthouse Viewer).
 
-Lazy bundles: maplibre (268.6 KB gz) on fleet-page mount, machine space
+Lazy bundles: maplibre (270.5 KB gz) on fleet-page mount, machine space
 (56.1 KB gz) warmed by the incident banner, three + R3F (249.4 KB gz) on
 scroll approach. Details and method in [docs/perf.md](docs/perf.md).
 
@@ -202,7 +203,7 @@ barrel, so it never rides in the unit page's initial JS: `ScanLog`,
 
 ## Testing
 
-`pnpm test` runs the vitest suite — 1,512 specs across 96 files: console
+`pnpm test` runs the vitest suite — 1,528 specs across 99 files: console
 components, both stores' reducers and guard rails, the transports against
 injected sockets and workers, the ordering gate under scripted disorder, and
 the sim engine's determinism and choreography. `pnpm e2e` builds the static
@@ -225,10 +226,13 @@ part.
 Worth saying plainly, because each of these is a decision rather than an
 oversight:
 
-- **One operator, no identity.** Actions are attributed to "Operator" and the
-  audit trail has no actor field. A real deployment needs authentication,
-  per-user attribution, and a handover between shifts, because the audit
-  trail's whole value is who did what.
+- **One operator, no identity.** The audit trail models who acted — every row
+  carries an actor, and it distinguishes the three kinds that matter: the
+  operator pressed something, the robot reported it, or a program ran to its
+  own clock. What it cannot do is tell two operators apart, because there is no
+  authentication to name them. A real deployment needs sign-in, per-user
+  attribution and a handover between shifts; the actor field is the seam where
+  that goes.
 - **Nothing is durable past the tab.** A reload is handled — the storyline
   resumes where it left off and the incidents come back with it, out of
   `sessionStorage` — but that is one browser tab remembering one sitting, not
@@ -240,30 +244,14 @@ oversight:
   A network that blocks it, or a host having a slow morning, is handled rather
   than ignored: a 2.5 s timeout and MapLibre's own error both flip the map to a
   degraded state that keeps every marker, says `Base map unavailable. Fleet
-  positions are unaffected.`, and leaves the rail and the feed untouched — the
+positions are unaffected.`, and leaves the rail and the feed untouched — the
   cartography is the only thing missing, and `e2e/map-degraded.spec.ts` proves
-  it with the host blocked. What it is not is a *fallback*: there is no bundled
+  it with the host blocked. What it is not is a _fallback_: there is no bundled
   basemap, so a reviewer behind a strict proxy sees the fleet on a blank ground
   rather than on streets.
 - **No fleet-scale write path.** Commands go to one unit at a time, except the
   firmware rollout, which is deliberately the exception that shows why
   fleet-scoped commands need their own confirmation and their own audit.
-
-## About this repository
-
-The history here starts at one large commit, and that is worth explaining
-rather than leaving to inference. This app was built over about two weeks in a
-private repository whose history accumulated third-party visual reference
-captures — other people's design work, gathered while studying it, and not mine
-to publish. Rather than rewrite that history I re-initialised the repository
-from the working tree, so the public history begins at the first release and
-the reference material never left my machine. `docs/images/REFERENCES.md`
-describes what those references were, in words, along with the rule that
-nothing in this app copies a frame, an asset, or a name from any of them.
-
-The commits since are the real thing: each one is a pass over a finished
-build — a scale receipt, an accessibility gate, a responsive defect, a
-dependency dropped — and they read that way.
 
 ## Run it
 

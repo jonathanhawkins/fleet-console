@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { calendarDate, timeZoneLabel } from "../alert-lifecycle";
 import {
   selectAlerts,
   selectUnitIds,
@@ -121,6 +122,11 @@ export function CohortReportSurface({
         // the build unexplained.
         statusCopy={{ open: "Open", resolved: "Restored" }}
         tier={tier}
+        // The day every clock time below belongs to, plus the zone they were
+        // read in. Taken from when the incident was raised rather than from
+        // now: the document describes that moment, and a copy printed the next
+        // morning must not date itself to the morning.
+        dateline={`${calendarDate(times.detected)} · times in ${timeZoneLabel(times.detected)}`}
         onClose={onClose}
       />
 

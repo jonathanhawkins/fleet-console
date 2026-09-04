@@ -197,10 +197,3 @@ export function UnitSilhouette({
     </svg>
   );
 }
-
-/** Where a joint's marker sits, as a fraction of the drawing box. Board math. */
-export function jointMarkFraction(joint: string): { x: number; y: number } | null {
-  const p = JOINT_MARKS[joint];
-  if (!p) return null;
-  return { x: p.x / SILHOUETTE_VIEWBOX.width, y: p.y / SILHOUETTE_VIEWBOX.height };
-}

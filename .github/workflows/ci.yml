@@ -23,8 +23,18 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      # Formatting was drifting: `pnpm format` reflowed a dozen unrelated files
+      # on every run, so every change arrived carrying someone else's
+      # whitespace. Checked here so the tree stays formatted rather than
+      # getting re-formatted by whoever next runs the script.
+      - run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm test
+      # Half the README receipts: the suite's own size, from the run that just
+      # happened. The lazy-chunk half needs a build, so the e2e job checks that
+      # side against its export — the script reports on whatever it can see.
+      - name: README receipts (suite)
+        run: node scripts/check-receipts.mjs
 
   e2e:
     name: Static export · budgets · Playwright
@@ -39,7 +49,21 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      # Chromium is ~40% of this job's wall clock when it is downloaded fresh
+      # every run. The key is the lockfile, so the cache turns over exactly
+      # when the Playwright version does; both jobs use the same key, so the
+      # second one to run gets a hit. `install-deps` still runs on a hit
+      # because the OS libraries live outside the cached directory.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
       # The e2e chain builds the static export itself, runs the five
       # Playwright projects against it, then checks both routes' JS budgets.
       - run: pnpm e2e
@@ -48,6 +72,10 @@ jobs:
       - name: Bundle receipt
         if: always()
         run: node scripts/check-budgets.mjs out >> "$GITHUB_STEP_SUMMARY"
+      # The other numbers the README prints about itself — suite size, lazy
+      # chunk weight. They drifted while nothing was watching them.
+      - name: README receipts (bundles)
+        run: node scripts/check-receipts.mjs out
       # Same export, served compressed: desktop-preset Lighthouse on / and
       # /unit/N-01 against Playwright's Chromium (installed above). Fails the job
       # when accessibility, best-practices or SEO drop under 100; performance is
@@ -88,7 +116,21 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      # Chromium is ~40% of this job's wall clock when it is downloaded fresh
+      # every run. The key is the lockfile, so the cache turns over exactly
+      # when the Playwright version does; both jobs use the same key, so the
+      # second one to run gets a hit. `install-deps` still runs on a hit
+      # because the OS libraries live outside the cached directory.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
       - run: pnpm e2e:stress
         env:
           CI: "1"

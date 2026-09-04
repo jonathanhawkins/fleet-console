@@ -429,7 +429,9 @@ describe("FleetRail", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
 
     const note = document.querySelector('[data-slot="region-note"]');
-    expect(note?.textContent).toBe("No units match “zzz.” Clear the search to see all 3.");
+    expect(note?.textContent).toBe(
+      "No units match “zzz.” Clear the search to see all 3.",
+    );
 
     // the floor holds for a filtered-empty list exactly like an empty fleet
     const scrollport = document.querySelector<HTMLElement>(

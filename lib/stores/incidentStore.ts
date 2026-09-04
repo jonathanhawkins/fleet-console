@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { type DiagEvent, type DiagEventMessage, type VerdictReport } from "@/lib/schema";
-import { useAuditStore, type AuditEntry } from "./auditStore";
+import { useAuditStore, type AuditEntry, OPERATOR } from "./auditStore";
 
 /**
  * Incident store: the diagnostic session state machine plus the history of
@@ -315,6 +315,7 @@ export const useIncidentStore = create<IncidentState>()((set) => ({
           audits.push({
             ts: s.session.startedAt,
             kind: "diag-start",
+            actor: OPERATOR,
             unitId: msg.unitId,
             summary: "Diagnostic scan started",
           });
@@ -329,6 +330,7 @@ export const useIncidentStore = create<IncidentState>()((set) => ({
           audits.push({
             ts: session.startedAt,
             kind: "diag-start",
+            actor: OPERATOR,
             unitId: msg.unitId,
             summary: "Diagnostic scan started",
           });
@@ -500,7 +502,6 @@ export const useIncidentStore = create<IncidentState>()((set) => ({
 // narrow selectors
 
 export const selectDiagPhase = (s: IncidentState): DiagPhase => s.phase;
-export const selectDiagSession = (s: IncidentState): DiagSession | null => s.session;
 /** Is the operator in machine space for the open session? */
 export const selectDiagWatching = (s: IncidentState): boolean => s.watching;
 
@@ -533,8 +534,6 @@ export const selectShownSession = (s: IncidentState): DiagSession | null =>
  */
 export const selectShownPhase = (s: IncidentState): DiagPhase =>
   s.session === null && s.exiting !== null ? s.exiting.phase : s.phase;
-export const selectIncidentHistory = (s: IncidentState): IncidentRecord[] => s.history;
-
 /**
  * History for one unit's drill-in page. Returns a fresh array — wrap with
  * `useShallow` (zustand/react/shallow) when subscribing from React.

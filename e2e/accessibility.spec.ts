@@ -30,8 +30,42 @@ const scan = (page: Page, selector?: string) => {
   return selector ? builder.include(selector) : builder;
 };
 
+/**
+ * Wait until nothing is still fading.
+ *
+ * axe resolves a text node's contrast by walking up for a background, and an
+ * ancestor at a fractional opacity has no answer to give — so every string
+ * under a surface that is animating in comes back as a contrast violation. The
+ * report overlay fades over 140 ms: shorter than it takes to notice, longer
+ * than it takes for a scan fired on `toBeVisible` to land inside it. That is
+ * how this spec came to report 22 serious violations against a document whose
+ * colours were never in question, and only under load.
+ *
+ * The test is that opacity has stopped *changing*, not that it has reached 1:
+ * plenty of this UI rests at a fractional opacity on purpose (a dimmed "Before"
+ * label, a disabled button, an off-emphasis joint), so "everything is opaque"
+ * is a state that never arrives.
+ */
+async function settled(page: Page) {
+  const sample = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll("*")]
+        .map((el) => getComputedStyle(el).opacity)
+        .join(","),
+    );
+
+  let previous = await sample();
+  for (let i = 0; i < 25; i += 1) {
+    await page.waitForTimeout(80);
+    const next = await sample();
+    if (next === previous) return;
+    previous = next;
+  }
+}
+
 /** Fails with the rule ids and the offending markup, not just a count. */
 async function expectNoViolations(page: Page, where: string, selector?: string) {
+  await settled(page);
   const { violations, passes } = await scan(page, selector).analyze();
   // An empty `violations` is only good news if the scan found something to
   // check. A run against a surface that had not rendered yet would be clean

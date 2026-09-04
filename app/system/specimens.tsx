@@ -37,7 +37,7 @@ export const SPECIMENS: readonly Specimen[] = [
   {
     name: "ConsoleButton",
     purpose:
-      "Every press in the product. One primary per page, and it is the incident's.",
+      "Every press in the product. One primary per page, and it is the incident’s.",
     usage: `<ConsoleButton variant="primary" size="md">Run diagnostic</ConsoleButton>`,
     props: [
       {
@@ -92,7 +92,7 @@ export const SPECIMENS: readonly Specimen[] = [
         name: "label",
         type: "ReactNode",
         fallback: "—",
-        note: "Rendered above the content with a hairline to the card's edge.",
+        note: "Rendered above the content with a hairline to the card’s edge.",
       },
       {
         name: "labelAs",
@@ -243,7 +243,7 @@ export const SPECIMENS: readonly Specimen[] = [
         name: "tone",
         type: `"ink" | "soft" | "nominal" | "warn" | "alert"`,
         fallback: `"ink"`,
-        note: "The figure's colour when the number itself is the alarm.",
+        note: "The figure’s colour when the number itself is the alarm.",
       },
     ],
     a11y: "It renders a `dt`/`dd` pair, so it must sit inside a `dl` — the KPI band on the fleet page is that list. Pending renders an em-dash rather than a zero, because a fleet that has not reported is not a fleet of zero.",
@@ -284,7 +284,7 @@ export const SPECIMENS: readonly Specimen[] = [
   },
   {
     name: "Disclosure",
-    purpose: "Height-animated reveal for a row's own detail. Open is the caller's state.",
+    purpose: "Height-animated reveal for a row’s own detail. Open is the caller’s state.",
     usage: `<Disclosure open={expanded}>{detail}</Disclosure>`,
     props: [
       {
@@ -298,7 +298,7 @@ export const SPECIMENS: readonly Specimen[] = [
         note: "Mounted on first open and kept, so the exit can play.",
       },
     ],
-    a11y: "The trigger belongs to the caller, which is what lets the row's own control own aria-expanded and aria-controls.",
+    a11y: "The trigger belongs to the caller, which is what lets the row’s own control own aria-expanded and aria-controls.",
     render: () => (
       <div className="flex flex-col gap-2">
         <SectionLabel>Open</SectionLabel>
@@ -463,7 +463,7 @@ export const SPECIMENS: readonly Specimen[] = [
       },
     ],
     wide: true,
-    a11y: "The footer knows nothing about the simulator; the demo's own controls are passed in, which is what lets it render in any composition.",
+    a11y: "The footer knows nothing about the simulator; the demo’s own controls are passed in, which is what lets it render in any composition.",
     render: () => <ConsoleFooter />,
   },
 ];

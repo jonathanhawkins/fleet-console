@@ -140,9 +140,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
-const { default: FleetMapView, BASEMAP_UNAVAILABLE_NOTE } = await import(
-  "./fleet-map-view"
-);
+const { default: FleetMapView, BASEMAP_UNAVAILABLE_NOTE } =
+  await import("./fleet-map-view");
 
 const REDUCED = "(prefers-reduced-motion: reduce)";
 

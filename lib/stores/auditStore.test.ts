@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  FLEET_AUDIT_SCOPE,
+  OPERATOR,
   selectAuditLog,
   selectUnitAuditLog,
   useAuditStore,
@@ -76,5 +78,42 @@ describe("audit store — append-only session log", () => {
       "alert-raised",
     ]);
     expect(selectUnitAuditLog("N-99")(s())).toEqual([]);
+  });
+});
+
+describe("attribution", () => {
+  /**
+   * The field is optional in the type and never absent in the store — that
+   * promise is kept here rather than by the compiler, because requiring it of
+   * every producer would make a dozen call sites answer a question they have
+   * no better answer to than this default.
+   */
+  it("attributes every entry, whether or not the producer said so", () => {
+    const audit = useAuditStore.getState();
+    audit.append({ ts: 1, kind: "alert-raised", unitId: "N-07", summary: "hot" });
+    audit.append({
+      ts: 2,
+      kind: "rollout-halted",
+      unitId: FLEET_AUDIT_SCOPE,
+      summary: "halted",
+    });
+    audit.append({
+      ts: 3,
+      kind: "command-accepted",
+      unitId: "N-07",
+      summary: "SAFE SIT accepted",
+      actor: OPERATOR,
+    });
+
+    const entries = useAuditStore.getState().entries;
+    expect(entries.every((e) => e.actor !== undefined)).toBe(true);
+
+    const byKind = Object.fromEntries(entries.map((e) => [e.kind, e.actor]));
+    // Unattributed and about a unit: the robot said it.
+    expect(byKind["alert-raised"]).toEqual({ kind: "unit", unitId: "N-07" });
+    // Unattributed and fleet-scoped: nobody's hand was on it at that instant.
+    expect(byKind["rollout-halted"]).toEqual({ kind: "system" });
+    // Attributed: the operator pressed something.
+    expect(byKind["command-accepted"]).toEqual({ kind: "operator", label: "Operator" });
   });
 });

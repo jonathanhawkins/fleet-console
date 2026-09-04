@@ -9,3 +9,14 @@ export const DISCLAIMER = "A design and engineering demo. All data is simulated.
 /** The two visual worlds. Contexts, not a user preference — never a theme toggle. */
 export const SPACES = ["operator", "machine"] as const;
 export type Space = (typeof SPACES)[number];
+
+/**
+ * Where the deployed demo lives.
+ *
+ * One constant because it is not only a link: `metadataBase` turns it into the
+ * absolute URLs a link unfurler needs for the preview card, and a stale value
+ * there does not break loudly — it serves a card that 404s, which looks like
+ * having no card at all. The markdown copies of this URL are listed in
+ * CLAUDE.md under "If this repo moves"; they cannot import a constant.
+ */
+export const SITE_URL = "https://fleet-console.pages.dev";

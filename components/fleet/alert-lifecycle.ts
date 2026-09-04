@@ -135,6 +135,39 @@ export function clockTime(ts: number): string {
   });
 }
 
+/**
+ * `4 September 2026` — the day the clock times belong to.
+ *
+ * `clockTime` deliberately prints no date: a feed row read at a glance wants
+ * the time and nothing else. A document does not have that luxury. A service
+ * report whose every stamp reads `10:33:53` records an incident that happened
+ * on no particular day, which is worse than useless to the technician holding
+ * it — so the report carries the date once, in its letterhead, and the times
+ * underneath belong to it.
+ */
+export function calendarDate(ts: number): string {
+  return new Date(ts).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+/**
+ * `BST`, or `UTC+01:00` where the runtime has no short name for the zone.
+ *
+ * Printed beside the date for the same reason the date is printed at all: this
+ * console shows one operator's wall clock, its units sit in named places, and a
+ * time with no zone on a document that leaves the building is a time that
+ * cannot be compared with anything.
+ */
+export function timeZoneLabel(ts: number): string {
+  const short = new Intl.DateTimeFormat(undefined, { timeZoneName: "short" })
+    .formatToParts(new Date(ts))
+    .find((part) => part.type === "timeZoneName")?.value;
+  return short ?? "local time";
+}
+
 function pad(n: number): string {
   return `${n}`.padStart(2, "0");
 }

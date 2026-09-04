@@ -1,8 +1,8 @@
 # Performance receipts
 
 > Budget rows below are the output of `node scripts/check-budgets.mjs` on the
-> static export built 2026-09-04 (`/` 183.0 KB gz over 14 scripts,
-> `/unit/N-01` 192.0 KB gz over 16). The same check runs at the end of every
+> static export built 2026-09-04 (`/` 183.2 KB gz over 14 scripts,
+> `/unit/N-01` 192.2 KB gz over 16). The same check runs at the end of every
 > `pnpm e2e` and in CI, so these two numbers are enforced rather than
 > remembered. Two moves account for most of the growth from the first
 > 173.8 / 175.1 KB build: the incident-history, cohort and trend-watch work
@@ -29,8 +29,8 @@ the PRD §7 line itself, not current usage.
 
 | Budget | Measured | Verdict |
 | --- | --- | --- |
-| Fleet page initial JS < 200 KB gz | **183.0 KB gz** (modern browsers; 14 files) | **PASS** |
-| Unit page initial JS < 200 KB gz | **192.0 KB gz** (16 files) | **PASS** |
+| Fleet page initial JS < 200 KB gz | **183.2 KB gz** (modern browsers; 14 files) | **PASS** |
+| Unit page initial JS < 200 KB gz | **192.2 KB gz** (16 files) | **PASS** |
 | 60 fps during the descent | p95 frame **9.2 ms**, 1 of 974 frames > 16.7 ms (0.1%) | **PASS** |
 | Interaction latency < 100 ms | Run-diagnostic press → visible feedback **1.3 ms** | **PASS** |
 | Component view (three + GLB) < 500 KB gz | 249.4 + 72.3 = **321.7 KB gz**, lazy | **PASS** |
@@ -45,8 +45,8 @@ request it).
 
 | Route | Next "First Load JS" | Measured JS (gz) | CSS (gz) | HTML (gz) |
 | --- | --- | --- | --- | --- |
-| `/` (fleet) | 190 kB | **183.0 KB** | 15.0 KB | 4.5 KB |
-| `/unit/[id]` | 198 kB | **192.0 KB** | 15.0 KB | 7.4 KB |
+| `/` (fleet) | 190 kB | **183.1 KB** | 15.0 KB | 4.5 KB |
+| `/unit/[id]` | 198 kB | **192.1 KB** | 15.0 KB | 7.4 KB |
 | legacy-only polyfill (`noModule`) | — | 38.5 KB | — | — |
 
 `zod/mini` holds both routes under budget: the schema layer and worker-host protocol

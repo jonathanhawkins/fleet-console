@@ -75,7 +75,13 @@ export function SectionLabel({
       {...props}
     >
       <span className="shrink-0">{children}</span>
-      <span aria-hidden className="mt-[0.55em] h-px flex-1 self-start bg-line" />
+      {/* A border rather than a 1px filled box: this label heads the sections
+          of a document that prints, and a browser drops background colour on
+          paper by default — which took every section rule off the sheet. */}
+      <span
+        aria-hidden
+        className="mt-[0.55em] h-0 flex-1 self-start border-t border-line"
+      />
     </Comp>
   );
 }

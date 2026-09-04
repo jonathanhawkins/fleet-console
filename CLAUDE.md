@@ -58,6 +58,22 @@ Next 15 (App Router, static-export capable) · React 19 · TS 5 strict · Tailwi
   up would trade one long file for two coupled ones.
 - Every change keeps `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm e2e` green; CI runs all four plus the bundle budgets.
 
+## If this repo moves
+
+The demo URL and the repo slug are baked into a handful of places. `SITE_URL`
+(`lib/constants.ts`) is the only one code reads — `metadataBase` derives the
+preview card's absolute URLs from it, and a stale value there fails silently by
+serving a card that 404s. The rest are prose and have to be edited by hand:
+
+- `README.md` — the CI badge (repo slug, twice in one line), the live-demo link,
+  and the `/system` link.
+- `docs/walkthrough.md` — the live-demo link in the opening paragraph.
+- `.github/workflows/ci.yml` — the deploy job's two summary lines, and the
+  `--project-name` passed to `wrangler pages deploy`.
+
+`node scripts/check-receipts.mjs` will not catch these; they are URLs, not
+numbers.
+
 ## Commands
 
 ```

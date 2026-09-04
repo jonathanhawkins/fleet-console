@@ -38,20 +38,20 @@ two quantized primitives — **battery** at 0.1 % and **last contact** at 1 s.
 A batch for N-03 notifies N-03's subscribers and nobody else; the fleet store
 never commits for it. Reads:
 
-| read                                | notes                                                       |
-| ----------------------------------- | ----------------------------------------------------------- |
-| `getUnitBuffers(id)`                | rings; read inside the rAF loop, never snapshot them        |
-| `getUnitTelemetryVersion(id)`       | canvas hosts poll this from the frame callback              |
-| `getUnitBattery(id)`                | 0.1 %, undefined until the first batch of the run           |
-| `getUnitLastContact(id)`            | 1 s, undefined until the first batch of the run             |
-| `telemetryBatchCount()`             | admitted batches since reset, any unit — receipts and tests |
-| `subscribeUnitTelemetry(id, fn)`    | `fn` runs once per batch for `id`, once per restatement     |
-| `useUnitTelemetryVersion(id)`       | `useSyncExternalStore`; re-renders per batch — canvas only  |
-| `useUnitBattery(id)`                | live 0.1 % ?? snapshot battery ?? 0 (exported by fleetStore) |
-| `useUnitLastContact(id)`            | re-renders at most once a second per unit                   |
+| read                             | notes                                                        |
+| -------------------------------- | ------------------------------------------------------------ |
+| `getUnitBuffers(id)`             | rings; read inside the rAF loop, never snapshot them         |
+| `getUnitTelemetryVersion(id)`    | canvas hosts poll this from the frame callback               |
+| `getUnitBattery(id)`             | 0.1 %, undefined until the first batch of the run            |
+| `getUnitLastContact(id)`         | 1 s, undefined until the first batch of the run              |
+| `telemetryBatchCount()`          | admitted batches since reset, any unit — receipts and tests  |
+| `subscribeUnitTelemetry(id, fn)` | `fn` runs once per batch for `id`, once per restatement      |
+| `useUnitTelemetryVersion(id)`    | `useSyncExternalStore`; re-renders per batch — canvas only   |
+| `useUnitBattery(id)`             | live 0.1 % ?? snapshot battery ?? 0 (exported by fleetStore) |
+| `useUnitLastContact(id)`         | re-renders at most once a second per unit                    |
 
 **Invariants:** a pure-telemetry batch is **zero zustand commits and one
-per-unit notification**; the store commits only when a *reactive* fact moves —
+per-unit notification**; the store commits only when a _reactive_ fact moves —
 status, alerts, a snapshot, the rounded fleet-average battery, the trending
 set. Samples never enter reactive state; never hold `toArray()` across frames.
 **Version counters drive canvas, never text**: text binds to the quantized

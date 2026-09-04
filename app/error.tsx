@@ -50,8 +50,7 @@ export default function Error({
       >
         <h1 className="text-display text-ink">This page did not load</h1>
         <p className="max-w-[34ch] text-body text-balance text-ink-soft">
-          Something in this page failed to render. Try again, or go back to
-          the fleet.
+          Something in this page failed to render. Try again, or go back to the fleet.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
           <button

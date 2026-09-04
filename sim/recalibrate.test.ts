@@ -142,9 +142,7 @@ describe("RECALIBRATE JOINT — execution beats", () => {
     engine.handle({ c: "RECALIBRATE_JOINT", unitId: INCIDENT_UNIT_ID });
 
     const msgs = drain(engine, now, now + FAST_RECAL.completeAtMs + 200);
-    const evidence = msgs
-      .filter(isDiagEvent)
-      .filter((m) => m.ev.k === "recalibration");
+    const evidence = msgs.filter(isDiagEvent).filter((m) => m.ev.k === "recalibration");
     expect(evidence).toHaveLength(1);
     const ev = evidence[0]!.ev;
     if (ev.k !== "recalibration") throw new Error("unreachable");
@@ -593,9 +591,7 @@ describe("N-01 encoder offset — recalibrating actually fixes it", () => {
       // act only: the encoder is drifted again and the amber is pending again.
       engine.handle({ c: "RESET_SIM" });
       const out = drain(engine, settled, settled + 6000);
-      return JSON.stringify(
-        out.filter((m) => m.t === "alert" || m.t === "alert_clear"),
-      );
+      return JSON.stringify(out.filter((m) => m.t === "alert" || m.t === "alert_clear"));
     };
     const first = run();
     expect(first).toBe(run());
@@ -628,8 +624,8 @@ describe("N-01 encoder offset — recalibrating actually fixes it", () => {
     // …and a partial outcome resolves nothing. The knee's alerts stand, which
     // is what makes DISPATCH SERVICE the next step rather than the third button.
     expect(out.some((m) => m.t === "alert_clear")).toBe(false);
-    expect(
-      engine.activeAlerts().some((m) => m.alert.unitId === INCIDENT_UNIT_ID),
-    ).toBe(true);
+    expect(engine.activeAlerts().some((m) => m.alert.unitId === INCIDENT_UNIT_ID)).toBe(
+      true,
+    );
   });
 });

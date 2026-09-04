@@ -15,8 +15,13 @@ import { useFleetStore } from "@/lib/stores";
  * header in isolation.
  */
 
-const { FleetRailFilterField, FleetRailOrderToggle, FleetUnitCount, setRailFilter, setRailOrder } =
-  await import("./fleet-rail-controls");
+const {
+  FleetRailFilterField,
+  FleetRailOrderToggle,
+  FleetUnitCount,
+  setRailFilter,
+  setRailOrder,
+} = await import("./fleet-rail-controls");
 
 const UNITS: ReadonlyArray<{ id: string; name: string }> = [
   { id: "N-01", name: "Cedar Row" },

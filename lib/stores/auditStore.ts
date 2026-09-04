@@ -52,6 +52,38 @@ export type AuditKind =
  */
 export const FLEET_AUDIT_SCOPE = "fleet";
 
+/**
+ * Who did it.
+ *
+ * The audit trail's whole value is attribution — a log that records what
+ * happened but not who caused it answers the easy half of every question asked
+ * of it afterwards. This console has one operator and no sign-in, so the
+ * honest model is not a user id: it is the *kind* of actor, which is a
+ * distinction the trail was flattening. "N-03 recovered itself" and "the
+ * operator halted the rollout" were the same shape of row, and they are not
+ * the same kind of event.
+ *
+ * - `operator` — a person pressed something. One unnamed operator, because
+ *   there is no authentication to name a second one; the label is the seam
+ *   where a real deployment puts an identity.
+ * - `unit` — the robot said so. Alerts it raised, faults it cleared by itself.
+ * - `system` — neither: a scheduled install landing, a rollout program's own
+ *   beat. Nobody decided it at the moment it happened.
+ */
+export type AuditActor =
+  | { kind: "operator"; label: string }
+  | { kind: "unit"; unitId: string }
+  | { kind: "system" };
+
+/** The one operator this demo has. A deployment replaces this with a session. */
+export const OPERATOR: AuditActor = { kind: "operator", label: "Operator" };
+
+/** The robot itself: what it reported, or resolved, without being asked. */
+export const byUnit = (unitId: string): AuditActor => ({ kind: "unit", unitId });
+
+/** No hand on it — a scheduled beat, a program running to its own clock. */
+export const SYSTEM: AuditActor = { kind: "system" };
+
 export interface AuditEntry {
   /** Session-unique, assigned on append ("audit-1", "audit-2", …). */
   id: string;
@@ -64,12 +96,30 @@ export interface AuditEntry {
   summary: string;
   /** Linkage: alert id, incident id ("inc-N-07-…"), or "COMMAND_SAFE_SIT#<seq>". */
   ref?: string;
+  /**
+   * Who caused it — see {@link AuditActor}.
+   *
+   * Optional in the type and never absent in practice: `append()` fills it for
+   * any producer that did not, so every stored row is attributed. It stays
+   * optional so a caller building an entry does not have to answer a question
+   * it has no better answer to than the default — the guarantee is held by a
+   * test over the store rather than by the shape of the input.
+   */
+  actor?: AuditActor;
 }
 
 export interface AuditState {
   /** Newest first (feed order, like alerts and incident history). Append-only. */
   entries: AuditEntry[];
-  /** Called by the other stores; the UI never appends. Deduped by (kind, ref). */
+  /**
+   * Called by the other stores; the UI never appends. Deduped by (kind, ref).
+   *
+   * `actor` is optional here and required on the stored entry: a caller that
+   * has something to say about who acted says it, and one that does not gets
+   * the default below rather than a field the reader has to treat as maybe-
+   * missing. Every row in the trail has an actor; not every producer has to
+   * think about it.
+   */
   append(entry: Omit<AuditEntry, "id">): void;
   reset(): void;
 }
@@ -86,7 +136,19 @@ export const useAuditStore = create<AuditState>()((set) => ({
         return s; // replayed fact: same identity, no new entry, no re-render
       }
       // Append-only, so length is monotonic and length+1 is a fresh id.
-      const withId: AuditEntry = { id: `audit-${s.entries.length + 1}`, ...entry };
+      //
+      // The default actor is the unit the entry is about: an entry nobody
+      // attributed came off the wire, and the wire is the robot talking. A
+      // fleet-scoped row has no unit to credit, so it falls to the system —
+      // which is exactly what a rollout beat is.
+      const actor: AuditActor =
+        entry.actor ??
+        (entry.unitId === FLEET_AUDIT_SCOPE ? SYSTEM : byUnit(entry.unitId));
+      const withId: AuditEntry = {
+        id: `audit-${s.entries.length + 1}`,
+        ...entry,
+        actor,
+      };
       return { entries: [withId, ...s.entries] };
     }),
 

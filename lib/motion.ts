@@ -76,7 +76,10 @@ export const DECEL_ORBIT = 0.992;
  * release point instead — "which snap point is nearest my finger" — is what
  * makes a sheet feel like it ignored the throw.
  */
-export function projectMomentum(velocity: number, decelerationRate = DECEL_SHEET): number {
+export function projectMomentum(
+  velocity: number,
+  decelerationRate = DECEL_SHEET,
+): number {
   return (velocity / 1000) * (decelerationRate / (1 - decelerationRate));
 }
 
@@ -111,7 +114,8 @@ export function rubberband(
 ): number {
   if (overshoot === 0 || dimension <= 0) return 0;
   const magnitude = Math.abs(overshoot);
-  const resisted = (magnitude * dimension * constant) / (dimension + constant * magnitude);
+  const resisted =
+    (magnitude * dimension * constant) / (dimension + constant * magnitude);
   return Math.sign(overshoot) * resisted;
 }
 

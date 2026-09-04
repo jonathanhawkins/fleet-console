@@ -94,6 +94,11 @@ export function AuditChronology({
             {paused ? <ChronologyPause ms={gap} /> : null}
             <li
               data-kind={entry.kind}
+              // Attribution, for anything reading the log rather than looking
+              // at it. The visible line already says "by Operator" where it
+              // matters, in prose; this is the same fact in a form a test — or
+              // a future actor column — can address without parsing English.
+              data-actor={entry.actor?.kind}
               data-collapsed={count > 1 ? count : undefined}
               className={cn(
                 "flex flex-wrap items-baseline gap-x-3 gap-y-0.5",
@@ -198,12 +203,6 @@ export function UnitAuditLog({ unitId, dense, empty = null }: UnitAuditLogProps)
   if (entries.length === 0) return <>{empty}</>;
   return <AuditChronology entries={entries} unitName={unit?.name} dense={dense} />;
 }
-
-/** Does this unit have a session log worth a section? */
-export function useHasAuditLog(unitId: string): boolean {
-  return useAuditStore((s) => s.entries.some((e) => e.unitId === unitId));
-}
-
 /**
  * The unit page's session log: everything the console recorded about this
  * robot since the operator opened it, collapsed by default.

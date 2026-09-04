@@ -148,7 +148,7 @@ export function buildChassis(source: THREE.Object3D, ink: string): Chassis {
  * away from its joint pivot. Scaling about the bounding centre, by an amount
  * computed from the bounding radius, gives every part the same rim.
  */
-export function outlineShell(
+function outlineShell(
   mesh: THREE.Mesh,
   part: THREE.Object3D,
   material: THREE.Material,

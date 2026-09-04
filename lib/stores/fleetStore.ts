@@ -8,7 +8,7 @@ import {
   type UnitUpdateMessage,
 } from "@/lib/schema";
 import { type ConnectionStatus } from "@/lib/transport/types";
-import { useAuditStore, type AuditEntry } from "./auditStore";
+import { useAuditStore, type AuditEntry, OPERATOR } from "./auditStore";
 import {
   getUnitBattery,
   recordTelemetryBatch,
@@ -42,12 +42,7 @@ const MAX_ALERTS = 100;
 export interface AlertResolution {
   /** What closed it: the SAFE SIT command, a logged diagnostic incident, the operator's judgment, the unit's own recovery, a staged firmware rollback, or a recalibration that re-zeroed the flagged channel (the last three arrive on the wire as `alert_clear`). */
   via:
-    | "safe-sit"
-    | "incident"
-    | "operator"
-    | "self-recovery"
-    | "rollback"
-    | "recalibration";
+    "safe-sit" | "incident" | "operator" | "self-recovery" | "rollback" | "recalibration";
   /** Linkage target: incident id ("inc-N-07-…") or command ref ("COMMAND_SAFE_SIT#3"). */
   ref?: string;
 }
@@ -272,7 +267,8 @@ export const useFleetStore = create<FleetState>()((set, get) => ({
       const summary = s.units[msg.unitId];
       if (summary) {
         kpiBatterySum += move.next - (move.prev ?? summary.battery);
-        const avg = kpiBatteryCount === 0 ? 0 : Math.round(kpiBatterySum / kpiBatteryCount);
+        const avg =
+          kpiBatteryCount === 0 ? 0 : Math.round(kpiBatterySum / kpiBatteryCount);
         if (avg !== s.kpiAvgBattery) next.kpiAvgBattery = avg;
       }
     }
@@ -369,6 +365,7 @@ export const useFleetStore = create<FleetState>()((set, get) => ({
       audit = {
         ts: now,
         kind: "alert-acked",
+        actor: OPERATOR,
         unitId: alert.unitId,
         summary: `Acknowledged by ${operator}`,
         ref: alertId,

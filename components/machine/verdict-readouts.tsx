@@ -150,7 +150,7 @@ export function VerdictDifferential({
 }
 
 /** What is still on the table, or nothing when the machine has nothing to say. */
-export function ResidualDifferential({
+function ResidualDifferential({
   anomaly,
   outcome,
 }: {

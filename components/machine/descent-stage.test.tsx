@@ -798,7 +798,9 @@ describe("DescentStage — the verdict takes focus and announces itself", () => 
   it("focuses the verdict section, not RETURN, naming the joint and the anomaly", async () => {
     await toVerdict();
 
-    const section = document.querySelector('[data-descent-layer] [data-slot="verdict-card"]');
+    const section = document.querySelector(
+      '[data-descent-layer] [data-slot="verdict-card"]',
+    );
     expect(section).not.toBeNull();
     expect(section).toHaveFocus();
     expect(section).toHaveAttribute("tabindex", "-1");

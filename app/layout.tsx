@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, JetBrains_Mono } from "next/font/google";
 import { ConsoleFooter } from "@/components/console";
+import { SITE_URL } from "@/lib/constants";
 import { SimReset, StorylineJump, TelemetryProvider } from "@/components/fleet";
 import "./globals.css";
 
@@ -32,7 +33,7 @@ const DESCRIPTION =
  * one thing a card must not do is imply the fleet is real.
  */
 export const metadata: Metadata = {
-  metadataBase: new URL("https://fleet-console.pages.dev"),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Fleet Console",
     template: "%s · Fleet Console",

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { calendarDate, timeZoneLabel } from "../alert-lifecycle";
 import { residualReading } from "@/components/machine/recalibrate-copy";
 import { type VerdictReport } from "@/lib/schema";
 import {
@@ -12,11 +13,7 @@ import {
 } from "@/lib/stores";
 import { jointLabel, useNow } from "@/components/console";
 import { AuditChronology } from "../audit-log";
-import {
-  componentForJoint,
-  componentLabel,
-  type ComponentId,
-} from "../component-spec";
+import { componentForJoint, componentLabel, type ComponentId } from "../component-spec";
 import { verdictLine } from "../incident-banner";
 import { incidentRef } from "../incident-history";
 import {
@@ -51,8 +48,8 @@ import { ServiceBlock } from "./service-block";
  * the data was convenient. A card would have made it a bigger tooltip.
  *
  * The document's *shape* — the surface, the letterhead, the ruled section, the
- * rail of moments, the figure, the colophon — is report-surface.tsx, shared
- * with the fleet's write-up (cohort-report-surface). What stays in this folder
+ * rail of moments, the figure, the colophon — is report-surface/, shared with
+ * the fleet's write-up (cohort-report-surface/). What stays in this folder
  * is everything this particular report knows: which journals it joins, and what
  * it is allowed to conclude from them, one section to a file.
  *
@@ -157,6 +154,11 @@ export function IncidentReportSurface({ record, onClose }: IncidentReportSurface
         }
         resolved={resolved}
         tier={tier}
+        // The day every clock time below belongs to, plus the zone they were
+        // read in. Taken from when the incident was raised rather than from
+        // now: the document describes that moment, and a copy printed the next
+        // morning must not date itself to the morning.
+        dateline={`${calendarDate(times.raised ?? record.report.ts)} · times in ${timeZoneLabel(times.raised ?? record.report.ts)}`}
         onClose={onClose}
       />
 

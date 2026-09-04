@@ -5,7 +5,12 @@ import {
   type FleetCommand,
   type FleetCommandEventMessage,
 } from "@/lib/schema";
-import { FLEET_AUDIT_SCOPE, useAuditStore, type AuditEntry } from "./auditStore";
+import {
+  FLEET_AUDIT_SCOPE,
+  useAuditStore,
+  type AuditEntry,
+  OPERATOR,
+} from "./auditStore";
 
 /**
  * Command store: the per-unit command state machine, driven entirely by
@@ -185,6 +190,7 @@ export const useCommandStore = create<CommandState>()((set) => ({
           audit = {
             ts: msg.ts,
             kind: "command-accepted",
+            actor: OPERATOR,
             unitId: msg.unitId,
             summary: `${label} accepted`,
             ref,
@@ -216,6 +222,7 @@ export const useCommandStore = create<CommandState>()((set) => ({
           audit = {
             ts: msg.ts,
             kind: "command-complete",
+            actor: OPERATOR,
             unitId: msg.unitId,
             summary: `${label} complete`,
             ref,
@@ -235,6 +242,7 @@ export const useCommandStore = create<CommandState>()((set) => ({
           audit = {
             ts: msg.ts,
             kind: "command-failed",
+            actor: OPERATOR,
             unitId: msg.unitId,
             summary: `${label} failed: ${msg.ev.reason}`,
             ref,
@@ -278,6 +286,7 @@ export const useCommandStore = create<CommandState>()((set) => ({
             audit = {
               ts: msg.ts,
               kind: "rollback-started",
+              actor: OPERATOR,
               unitId: FLEET_AUDIT_SCOPE,
               summary:
                 fw !== null ? `Staged rollback of ${fw} started` : `${label} started`,
@@ -313,6 +322,7 @@ export const useCommandStore = create<CommandState>()((set) => ({
               ? {
                   ts: msg.ts,
                   kind: "rollout-halted",
+                  actor: OPERATOR,
                   unitId: FLEET_AUDIT_SCOPE,
                   // The engine's receipt line, verbatim — "ROLLOUT HALTED —
                   // N-05 REMAINS ON 2.3.7". The demonstrable non-event IS the
@@ -345,6 +355,7 @@ export const useCommandStore = create<CommandState>()((set) => ({
           audit = {
             ts: msg.ts,
             kind: "command-failed",
+            actor: OPERATOR,
             unitId: FLEET_AUDIT_SCOPE,
             summary: `${label} failed: ${msg.ev.reason}`,
             ref,

@@ -16,6 +16,7 @@ next-env.d.ts.bak
 
 # testing
 /coverage
+.vitest-summary.json
 /test-results/
 /playwright-report/
 /blob-report/

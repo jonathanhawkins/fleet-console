@@ -159,8 +159,9 @@ docs/perf.md, are the receipt —
 and [docs/evidence/lighthouse/system.json](docs/evidence/lighthouse/system.json)
 (load any of them in the Lighthouse Viewer).
 
-Lazy bundles: maplibre (270.5 KB gz) on fleet-page mount, machine space
-(56.1 KB gz) warmed by the incident banner, three + R3F (249.4 KB gz) on
+Lazy bundles, measured on the CI build (`scripts/check-receipts.mjs` reads
+these back out of this file and fails when they drift): maplibre (271.4 KB gz) on fleet-page mount, machine space
+(56.1 KB gz) warmed by the incident banner, three + R3F (250.5 KB gz) on
 scroll approach. Details and method in [docs/perf.md](docs/perf.md).
 
 ## Component library

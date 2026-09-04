@@ -101,8 +101,13 @@ if (existsSync(chunkDir)) {
     const measured = bytes / 1024;
     const claimed = quoted(pattern, label);
     if (claimed === null) continue;
-    // A tenth of a KB is below the noise floor of a rebuild; a KB is drift.
-    if (Math.abs(claimed - measured) > 1) {
+    // Two kilobytes, because the same commit does not gzip to the same size
+    // everywhere: CI measured maplibre 0.9 KB heavier than this laptop and
+    // three 0.9 KB heavier again, on identical sources. A tighter band fails
+    // on the runner rather than on a regression, which is the wrong way for a
+    // gate to be wrong. The drift this exists to catch — a chunk quietly
+    // acquiring a dependency — is tens of kilobytes, not one.
+    if (Math.abs(claimed - measured) > 2) {
       failures.push(
         `${label}: README says ${claimed.toFixed(1)} KB gz, measured ${measured.toFixed(1)} KB gz`,
       );

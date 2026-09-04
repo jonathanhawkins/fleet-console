@@ -19,7 +19,7 @@ import { useAuditStore, type AuditEntry } from "./auditStore";
  *
  * `beginDescent` is UI-initiated (the operator pressed "Run diagnostic" —
  * the caller also sends RUN_DIAGNOSTIC on the transport). Everything after
- * that is driven by streamed diag_events, not timers (PRD §6 Phase 3).
+ * that is driven by streamed diag_events, not timers (PRD §6).
  * Off-script events are ignored, with one pragmatic exception: `scan_start`
  * while idle opens a session anyway, so a page refreshed mid-scan (or a
  * second console) still renders the descent.

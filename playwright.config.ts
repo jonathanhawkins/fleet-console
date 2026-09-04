@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * One e2e suite: the 90-second golden path (PRD §6, Phase 6), run against the
+ * One e2e suite: the 90-second golden path (PRD §6), run against the
  * deploy artifact — a static export with the sim in a Web Worker — not against
  * `next dev`. The webServer builds that artifact with the storyline compressed
  * (onset 6 s / amber 9 s / red 12 s, diag choreography at 0.25x) and a pinned
@@ -64,7 +64,7 @@ const E2E_BUILD_ENV = [
   // engine tests) + compressed-timeline browser verification.
   "NEXT_PUBLIC_SIM_N03_BLOCK_MS=3600000",
   "NEXT_PUBLIC_SIM_N03_CLEAR_MS=3640000",
-  // Same treatment for the Phase 11 firmware cohort (default onset 180 s,
+  // Same treatment for the firmware cohort (default onset 180 s,
   // queued install 270 s), and the same reason with more force: a cohort forms
   // FOUR alert rows at once and puts a card above the whole page. Every lane
   // except the cohort one asserts against a fleet where that has not happened.
@@ -115,18 +115,20 @@ export default defineConfig({
   projects: [
     {
       /**
-       * The desk lane. Four specs: the golden path (the walk that IS the
-       * product), the leave-and-return loop it does not cover — an operator
-       * stepping out of a running scan and coming back to it — the
-       * recalibration branch it deliberately does not take, which is
-       * the maneuver that earns the dispatch, and the map's failure path —
-       * a blocked tile host, which needs nothing about the storyline and so
-       * runs against the same plain build as the other three. They share the
-       * lane because they share a build and a viewport; they are separate
-       * files because one of them is the demo and the rest are properties of it.
+       * The desk lane. The golden path (the walk that IS the product), the
+       * leave-and-return loop it does not cover — an operator stepping out of
+       * a running scan and coming back to it — the recalibration branch it
+       * deliberately does not take, which is the maneuver that earns the
+       * dispatch, the map's failure path (a blocked tile host, which needs
+       * nothing about the storyline), and the accessibility walk: axe on each
+       * surface the path opens, plus one traversal driven only by the
+       * keyboard. They share the lane because they share a build and a
+       * viewport; they are separate files because one of them is the demo and
+       * the rest are properties of it.
        */
       name: "chromium",
-      testMatch: /(golden-path|leave-return|recalibrate|map-degraded|error-states)\.spec\.ts/,
+      testMatch:
+        /(golden-path|leave-return|recalibrate|map-degraded|error-states|accessibility)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         // Override the device preset's 720p: tall enough that all eight rail
@@ -179,7 +181,7 @@ export default defineConfig({
     },
     {
       /**
-       * The reduced-motion lane (audit finding #5). Same build, same desktop
+       * The reduced-motion lane. Same build, same desktop
        * viewport as `chromium` — the only variable is the preference. Five RM
        * implementations (MapLibre's essential:false skip, the banner's rAF
        * spring branch, the descent's REDUCED framer timeline, the CSS

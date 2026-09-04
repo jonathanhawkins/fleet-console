@@ -19,9 +19,9 @@ import * as z from "zod/mini";
  */
 
 /**
- * Unit ids are "N-" + two or three digits. The core fleet is N-01…N-08 (N-09
- * reserved for the ESP32 stretch); the SIM_UNITS scale knob generates N-009…
- * N-500 style three-digit ids beyond the core eight.
+ * Unit ids are "N-" + two or three digits. The core fleet is N-01…N-08; the
+ * SIM_UNITS scale knob generates N-009…N-500 style three-digit ids beyond the
+ * core eight.
  */
 export const unitIdSchema = z
   .string()
@@ -31,7 +31,7 @@ export const unitIdSchema = z
 export const batteryPctSchema = z.number().check(z.minimum(0), z.maximum(100));
 
 /**
- * Firmware version, plain three-part semver ("2.3.7"). Additive, Phase 11:
+ * Firmware version, plain three-part semver ("2.3.7"). Additive:
  * firmware is fleet-management state (the rollout-cohort storyline groups and
  * rolls back units by it), so it rides the unit summary like posture does.
  */
@@ -60,7 +60,7 @@ export const unitStatusSchema = z.enum(["nominal", "amber", "red"]);
 export type UnitStatus = z.infer<typeof unitStatusSchema>;
 
 /**
- * Gross body posture. Optional (additive, Phase 10): this sim always emits it,
+ * Gross body posture. Optional (additive): this sim always emits it,
  * but consumers must treat `undefined` as "walking" so pre-posture snapshots
  * stay valid. SAFE SIT flips it to "sitting" — restated live by a
  * `unit_update` at the settle beat — and RESET_SIM's snapshot restores
@@ -81,14 +81,14 @@ export const unitSummarySchema = z.object({
   }),
   posture: z.optional(postureSchema),
   /**
-   * Installed firmware (additive, Phase 11). This sim always emits it;
+   * Installed firmware (additive). This sim always emits it;
    * consumers must treat `undefined` as "unknown" so pre-firmware snapshots
    * stay valid. Restated live by `unit_update` when it changes (the pending
    * unit's scheduled upgrade landing; a staged rollback restoring a unit).
    */
   fw: z.optional(fwVersionSchema),
   /**
-   * A scheduled-but-not-installed upgrade (additive, Phase 11). Present only
+   * A scheduled-but-not-installed upgrade (additive). Present only
    * while the rollout program has this unit queued: `fw` stays the running
    * version, `fwPending` names what is about to install. HALT_ROLLOUT clears
    * it without installing (the demo's visible save); the upgrade landing
@@ -170,7 +170,7 @@ export const diagEventSchema = z.discriminatedUnion("k", [
    *
    * It travels on `diag_event` rather than inside the command's `complete`
    * beat because it is *evidence*, and evidence has one road on this wire. The
-   * doctrine is the one Phase 11 wrote for fleet commands: a command narrates
+   * doctrine is the one fleet commands established: a command narrates
    * itself on its own lane, and its per-unit consequences ride the per-unit
    * messages they always did. A recalibration's consequence is a channel, so
    * it arrives as a channel — the verdict card redraws the exhibit it already
@@ -209,7 +209,7 @@ export const executedCommandSchema = z.enum(["COMMAND_SAFE_SIT", "RECALIBRATE_JO
 export type ExecutedCommand = z.infer<typeof executedCommandSchema>;
 
 /**
- * Fleet-scoped commands the sim executes (additive, Phase 11) — commands whose
+ * Fleet-scoped commands the sim executes (additive) — commands whose
  * subject is the rollout program, not one unit. Narrated on the wire by
  * `fleet_command_event`s carrying this name; per-unit consequences travel on
  * the per-unit messages they always have (`unit_update`, `alert_clear`).
@@ -218,7 +218,7 @@ export const fleetCommandSchema = z.enum(["HALT_ROLLOUT", "ROLLBACK_COHORT"]);
 export type FleetCommand = z.infer<typeof fleetCommandSchema>;
 
 /**
- * Execution beats of one command (Phase 10). Exactly one `accepted` or
+ * Execution beats of one command. Exactly one `accepted` or
  * `failed` answers the command synchronously; an accepted command then streams
  * `progress` beats and ends in exactly one `complete`. `failed.reason` and
  * `progress.note` are terse machine-voice strings the UI prints verbatim.
@@ -239,7 +239,7 @@ export type CommandEvent = z.infer<typeof commandEventSchema>;
 export const fleetMessageSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("fleet_snapshot"), units: z.array(unitSummarySchema) }),
   /**
-   * Live restatement of ONE unit's summary (additive, Phase 10). Emitted when
+   * Live restatement of ONE unit's summary (additive). Emitted when
    * unit state changes between snapshots — today the SAFE SIT settle beat,
    * where posture flips to "sitting" — so a connected client never has to
    * reconnect to learn it. Deliberately per-unit: at 500 units a full
@@ -256,7 +256,7 @@ export const fleetMessageSchema = z.discriminatedUnion("t", [
   z.object({ t: z.literal("alert"), alert: alertSchema }),
   /**
    * An alert the SIM resolved (additive) — the N-03 blocked-navigation
-   * storyline clearing itself, and (Phase 11) a staged rollback clearing each
+   * storyline clearing itself, and a staged rollback clearing each
    * restored unit's cohort alert. Resolution is normally an operator fact
    * recorded client-side (there is no RESOLVE command on the wire); this
    * message is the case where the *sim* is the author, and the console records
@@ -299,7 +299,7 @@ export const fleetMessageSchema = z.discriminatedUnion("t", [
     ev: commandEventSchema,
   }),
   /**
-   * Execution beats of one FLEET-scoped command (additive, Phase 11) —
+   * Execution beats of one FLEET-scoped command (additive) —
    * HALT_ROLLOUT and ROLLBACK_COHORT, whose subject is the rollout program
    * rather than a unit. Deliberately its own message, not a unitId-less
    * `command_event`: per-unit command ordering keys on unitId, and a fleet
@@ -337,6 +337,10 @@ export type FleetCommandEventMessage = Extract<
 >;
 
 /** Everything the console can say to the sim. */
+/** The storyline's addressable chapters; the engine resolves each to a beat. */
+export const storylineChapterSchema = z.enum(["knee", "nav", "cohort", "offset"]);
+export type StorylineChapterName = z.infer<typeof storylineChapterSchema>;
+
 export const operatorCommandSchema = z.discriminatedUnion("c", [
   z.object({ c: z.literal("RUN_DIAGNOSTIC"), unitId: unitIdSchema }),
   z.object({ c: z.literal("COMMAND_SAFE_SIT"), unitId: unitIdSchema }),
@@ -353,17 +357,29 @@ export const operatorCommandSchema = z.discriminatedUnion("c", [
    */
   z.object({ c: z.literal("RECALIBRATE_JOINT"), unitId: unitIdSchema }),
   /**
-   * Stop the firmware rollout program (Phase 11): scheduled upgrades are
+   * Stop the firmware rollout program: scheduled upgrades are
    * canceled before they install — already-upgraded units are NOT touched
    * (that is ROLLBACK_COHORT's job). Fleet-scoped: no unitId.
    */
   z.object({ c: z.literal("HALT_ROLLOUT") }),
   /**
    * Roll every unit running `fw` back to the known-good baseline, strictly one
-   * unit at a time (Phase 11). Fleet-scoped: the cohort is named by firmware,
+   * unit at a time. Fleet-scoped: the cohort is named by firmware,
    * not by unit ids — the operator acts on the blast radius, not on a robot.
    */
   z.object({ c: z.literal("ROLLBACK_COHORT"), fw: fwVersionSchema }),
   z.object({ c: z.literal("RESET_SIM") }),
+  /**
+   * Replay the storyline from the top and stop just short of one chapter, so
+   * the fleet is in the state that chapter opens on and its first alert is
+   * still seconds away.
+   *
+   * A chapter, not a timestamp: the timelines are configurable per build, so
+   * the moment named "the firmware cohort" is 180 s in the shipped sim and
+   * parked past the horizon in the e2e one. The console names the story and
+   * the engine owns the clock — the same division that keeps a joint off
+   * RECALIBRATE_JOINT.
+   */
+  z.object({ c: z.literal("SEEK_STORYLINE"), chapter: storylineChapterSchema }),
 ]);
 export type OperatorCommand = z.infer<typeof operatorCommandSchema>;

@@ -44,7 +44,7 @@ export interface UnitMarker {
   update(unit: UnitSummary, cohort?: string): void;
 }
 
-/** `/unit/N-07` — the drill-in route (Phase 2). */
+/** `/unit/N-07` — the drill-in route. */
 export function unitHref(unitId: string): string {
   return `/unit/${unitId}`;
 }

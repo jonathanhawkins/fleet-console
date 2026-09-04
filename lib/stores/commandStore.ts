@@ -45,12 +45,12 @@ import { FLEET_AUDIT_SCOPE, useAuditStore, type AuditEntry } from "./auditStore"
  * `dismissCommand(unitId, cmd)` — the operator saw the outcome and put it away
  * — or a snapshot restates the world.
  *
- * Phase 11 adds the FLEET slice: the same machine driven by
+ * The FLEET slice is the same machine driven by
  * `fleet_command_event`s, keyed by command name instead of unit id
  * (`fleetCommands`), because HALT_ROLLOUT and ROLLBACK_COHORT act on the
  * rollout program, not on a robot. Its seq gate is per command entry (the
  * transport's ordering gate already enforces the single fleet lane); its
- * audit receipts are the Phase 11 kinds — `rollback-started` on accepted,
+ * audit receipts are the fleet-scoped kinds — `rollback-started` on accepted,
  * `rollout-halted` / `rollback-complete` on complete, `command-failed` on a
  * refusal — all under FLEET_AUDIT_SCOPE.
  */

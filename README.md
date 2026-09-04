@@ -1,5 +1,7 @@
 # Fleet Console
 
+[![CI](https://github.com/jonathanhawkins/fleet-console/actions/workflows/ci.yml/badge.svg)](https://github.com/jonathanhawkins/fleet-console/actions/workflows/ci.yml)
+
 A fleet-operations console for home humanoid robots. Eight units on a map,
 joint telemetry at 10 Hz, and one incident that walks an operator from a
 glance to a named failed part. A design and engineering demo; all data is
@@ -37,9 +39,14 @@ Three more storylines share the same clock: N-03 halts on a blocked route at
 2:00 and recovers itself; from 3:00 four units raise the same warning on the
 same firmware, with a rollout to halt and a cohort to roll back; and at 5:30
 N-01 reports the one fault a recalibration genuinely fixes, so the same
-command that came back `PARTIAL` on the knee clears it. They are described
-in [docs/walkthrough.md](docs/walkthrough.md). _Reset simulation_
-in the footer replays everything from the same seed.
+command that came back `PARTIAL` on the knee clears it.
+
+**You do not have to wait for them.** _Jump to_ in the footer — _Blocked
+route_, _Firmware cohort_, _Ankle offset_ — replays the run from the top and
+stops eight seconds short of that chapter, so the alert still arrives while
+you are watching and the fleet still carries the history it would have had.
+_Reset simulation_ starts over from the same seed. All four are described in
+[docs/walkthrough.md](docs/walkthrough.md).
 
 ## Two worlds
 
@@ -108,8 +115,8 @@ summary; the numbers below are copied from that output.
 
 | Budget                                   | Measured                                 | Verdict |
 | ---------------------------------------- | ---------------------------------------- | ------- |
-| Fleet page initial JS < 200 KB gz        | **185.7 KB**                             | PASS    |
-| Unit page initial JS < 200 KB gz         | **193.9 KB**                             | PASS    |
+| Fleet page initial JS < 200 KB gz        | **178.1 KB**                             | PASS    |
+| Unit page initial JS < 200 KB gz         | **187.1 KB**                             | PASS    |
 | 60 fps during the descent                | p95 frame 9.2 ms, 1 of 974 over 16.7 ms  | PASS    |
 | Interaction latency < 100 ms             | Run-diagnostic press → feedback 1.3 ms   | PASS    |
 | Component view (three + GLB) < 500 KB gz | 321.7 KB, lazy                           | PASS    |
@@ -174,13 +181,23 @@ barrel, so it never rides in the unit page's initial JS: `ScanLog`,
 
 ## Testing
 
-`pnpm test` runs the vitest suite: console components, both stores' reducers
-and guard rails, the transports against injected sockets and workers, the
-ordering gate under scripted disorder, and the sim engine's determinism and
-choreography. `pnpm e2e` builds the static export and runs five Playwright
-projects against it — the golden path, leave-and-return, the firmware cohort,
-the phone at 390 px, and reduced motion at both viewports — then checks the
-bundle budgets. CI runs lint, typecheck, unit, e2e and budgets on every push.
+`pnpm test` runs the vitest suite — 1,512 specs across 96 files: console
+components, both stores' reducers and guard rails, the transports against
+injected sockets and workers, the ordering gate under scripted disorder, and
+the sim engine's determinism and choreography. `pnpm e2e` builds the static
+export and runs five Playwright projects against it — the golden path,
+leave-and-return, the firmware cohort, the phone at 390 px, and reduced motion
+at both viewports — then checks the bundle budgets. CI runs lint, typecheck,
+unit, e2e and budgets on every push.
+
+Accessibility is tested twice, because the two methods reach different places.
+Lighthouse gates the three routes at rest. `e2e/accessibility.spec.ts` reaches
+everything they cannot: it runs axe (WCAG 2 A/AA) on each surface the golden
+path opens — the fleet with an alert on it, the descent mid-scan, the verdict,
+the safe-sit confirm gate, the incident report — and then walks the same path
+again using only the keyboard, asserting a visible focus ring at every stop in
+both colour spaces. A 100 that never opened a dialog is a number about the easy
+part.
 
 ## What this demo is not
 

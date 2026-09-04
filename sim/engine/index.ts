@@ -11,20 +11,12 @@ import { drainCommands, handleCommand } from "./commands";
 import { BATCH_INTERVAL_MS, JOINTS } from "./constants";
 import { DEFAULT_DIAG_TIMELINE, drainDiag, type DiagTimeline } from "./diagnostics";
 import { FLEET_UNITS, initUnits, MAX_UNIT_COUNT, MIN_UNIT_COUNT } from "./fleet";
-import { DEFAULT_TIMELINE, kneeCrossings, type IncidentTimeline } from "./incident-knee";
-import {
-  DEFAULT_OFFSET_TIMELINE,
-  offsetCrossings,
-  type OffsetTimeline,
-} from "./incident-offset";
-import { DEFAULT_NAV_TIMELINE, navCrossings, type NavTimeline } from "./nav-recovery";
+import { DEFAULT_TIMELINE, type IncidentTimeline } from "./incident-knee";
+import { DEFAULT_OFFSET_TIMELINE, type OffsetTimeline } from "./incident-offset";
+import { DEFAULT_NAV_TIMELINE, type NavTimeline } from "./nav-recovery";
 import { DEFAULT_RECAL_TIMELINE, type RecalTimeline } from "./recalibrate";
-import {
-  cohortCrossings,
-  DEFAULT_COHORT_TIMELINE,
-  drainRollback,
-  type CohortTimeline,
-} from "./rollout";
+import { DEFAULT_COHORT_TIMELINE, drainRollback, type CohortTimeline } from "./rollout";
+import { storylineCrossings } from "./crossings";
 import { DEFAULT_SIT_TIMELINE, type SitTimeline } from "./safe-sit";
 import { createEngineState, snapshot, type EngineConfig } from "./state";
 import { samplePoint, updateBattery } from "./telemetry";
@@ -107,13 +99,8 @@ export function createSimEngine(options: SimEngineOptions = {}): SimEngine {
   const cfg = resolveConfig(options);
   const st = createEngineState(initUnits(cfg.seed, cfg.unitCount));
 
-  /** Every storyline's beats in storyline window (prevMs, curMs], in a fixed order. */
-  const crossings = (prevMs: number, curMs: number): FleetMessage[] => [
-    ...kneeCrossings(cfg, st, prevMs, curMs),
-    ...navCrossings(cfg, st, prevMs, curMs),
-    ...offsetCrossings(cfg, st, prevMs, curMs),
-    ...cohortCrossings(cfg, st, prevMs, curMs),
-  ];
+  const crossings = (prevMs: number, curMs: number): FleetMessage[] =>
+    storylineCrossings(cfg, st, prevMs, curMs);
 
   function advance(totalMs: number): FleetMessage[] {
     const out: FleetMessage[] = [];
@@ -183,6 +170,13 @@ export function createSimEngine(options: SimEngineOptions = {}): SimEngine {
 // public surface — every name sim/engine.ts has always exported
 
 export { BATCH_INTERVAL_MS, JOINTS, type Joint } from "./constants";
+export {
+  CHAPTER_LEAD_MS,
+  chapterBeatMs,
+  chapterSeekMs,
+  STORYLINE_CHAPTERS,
+  type StorylineChapter,
+} from "./chapters";
 export { FLEET_UNITS, GEN_REGION, MAX_UNIT_COUNT, MIN_UNIT_COUNT } from "./fleet";
 export {
   DEFAULT_TIMELINE,

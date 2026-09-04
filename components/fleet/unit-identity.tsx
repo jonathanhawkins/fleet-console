@@ -162,7 +162,7 @@ export function UnitIdentity({ className, unitId, ...props }: UnitIdentityProps)
                 </time>
               }
             />
-            {/* Which build this robot is running (Phase 11).
+            {/* Which build this robot is running.
 
                 It sits in the metadata row rather than on the incident banner
                 because it is not news: firmware is a standing fact about a unit,

@@ -1,4 +1,6 @@
 import { type FleetMessage, type OperatorCommand } from "@/lib/schema";
+import { chapterSeekMs, type StorylineChapter } from "./chapters";
+import { storylineCrossings } from "./crossings";
 import { handleRunDiagnostic } from "./diagnostics";
 import { initUnits } from "./fleet";
 import { resolveByCalibration } from "./incident-offset";
@@ -76,6 +78,31 @@ function handleReset(cfg: EngineConfig, st: EngineState): FleetMessage[] {
   return [snapshot(st)];
 }
 
+/**
+ * SEEK_STORYLINE: replay the run and stop just short of a chapter.
+ *
+ * A reset, then one wide crossing window. Seeking is a reset first because
+ * beats do not un-fire: from 4:00 there is no way back to 2:00 except to start
+ * the story again, and doing it unconditionally is what makes the chapter
+ * button land on the same board every time it is pressed rather than on
+ * whatever the last five minutes happened to leave behind.
+ *
+ * The window is `(0, target]` — the whole run up to the chapter, in one call.
+ * Every storyline gates on `prevMs < at && curMs >= at`, so each beat in that
+ * span fires exactly once and the fleet arrives carrying its history: the knee
+ * already red when the cohort forms, because by 3:00 it is.
+ */
+function handleSeek(
+  cfg: EngineConfig,
+  st: EngineState,
+  chapter: StorylineChapter,
+): FleetMessage[] {
+  const targetMs = chapterSeekMs(cfg, chapter);
+  const startMs = nowTotalMs(cfg, st) - targetMs;
+  resetStoryline(st, initUnits(cfg.seed, cfg.unitCount), startMs);
+  return [snapshot(st), ...storylineCrossings(cfg, st, 0, targetMs)];
+}
+
 /** Apply an operator command; returns messages to broadcast. */
 export function handleCommand(
   cfg: EngineConfig,
@@ -85,6 +112,8 @@ export function handleCommand(
   switch (cmd.c) {
     case "RESET_SIM":
       return handleReset(cfg, st);
+    case "SEEK_STORYLINE":
+      return handleSeek(cfg, st, cmd.chapter);
     case "COMMAND_SAFE_SIT":
       return handleSafeSit(cfg, st, cmd);
     case "RECALIBRATE_JOINT":

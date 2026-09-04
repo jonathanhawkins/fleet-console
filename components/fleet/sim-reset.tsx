@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { resetStatusHistory } from "./status-history";
+import { clearLocalStoryline } from "./storyline-reset";
 import { sendCommand } from "./telemetry-command";
-import { useIncidentStore } from "@/lib/stores";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,12 +21,8 @@ import { cn } from "@/lib/utils";
  * in the product, which is exactly its rank.
  *
  * **Both halves of the reset.** RESET_SIM restarts the sim's storyline and
- * broadcasts a fresh snapshot, which clears the fleet store's alerts and
- * statuses. It cannot clear what only the client knows: the incident history
- * written by `completeAscent()`, and the status-timeline recorder's spans. A
- * reset that replayed the incident while last run's verdict still sat in the
- * unit's history would leave the console showing two of everything by the third
- * pass.
+ * broadcasts a fresh snapshot; `clearLocalStoryline()` handles what only the
+ * client knows (storyline-reset.ts). `StorylineJump` is the other caller.
  */
 
 export interface SimResetProps {
@@ -39,10 +34,7 @@ export function SimReset({ className }: SimResetProps) {
 
   const reset = React.useCallback(() => {
     if (!sendCommand({ c: "RESET_SIM" })) return;
-    // Local state the wire does not own. Order matters only in that both must
-    // happen; the snapshot that comes back handles everything else.
-    useIncidentStore.getState().reset();
-    resetStatusHistory();
+    clearLocalStoryline();
     setPending(true);
     window.setTimeout(() => setPending(false), 1200);
   }, []);

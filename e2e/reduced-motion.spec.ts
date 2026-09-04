@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * The golden path under `prefers-reduced-motion: reduce` (audit finding #5).
+ * The golden path under `prefers-reduced-motion: reduce`.
  *
  * Every reduced-motion branch in this product has a unit test against a stubbed
  * `matchMedia`, and none of that proves the five implementations — a CSS clamp,

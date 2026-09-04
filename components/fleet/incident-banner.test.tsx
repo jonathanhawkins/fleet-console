@@ -26,7 +26,7 @@ import { setCommandTransport } from "./telemetry-command";
  * "descending" waiting for events that were never asked for.
  *
  * And it must tell the truth about which state it is in, including the honest
- * Phase 2 in-progress state that Phase 3's descent will replace.
+ * The in-progress state the descent replaces.
  */
 
 const sent: OperatorCommand[] = [];

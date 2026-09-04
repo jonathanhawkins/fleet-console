@@ -5,17 +5,42 @@ import { registerFrame } from "@/components/console";
 import { cn } from "@/lib/utils";
 import { type DiagChannel } from "@/lib/stores";
 import { readToken, TOKEN_FALLBACK } from "@/lib/tokens/fallback";
-import { parseWireframe } from "@/lib/wireframe/parse";
-import { projectWireframe, type ProjectedFigure } from "@/lib/wireframe/project";
-import {
-  depthScale,
-  LEVEL_ALPHA,
-  LEVELS,
-  levelFor,
-  LIFT_BOOST,
-  L_SKIP,
-} from "@/lib/wireframe/tiers";
+import { LEVELS, LIFT_BOOST } from "@/lib/wireframe/tiers";
 import { type WireframeData } from "@/lib/wireframe/types";
+import {
+  draw,
+  MARGIN,
+  type Palette,
+  type Runtime,
+  type SubjectTone,
+} from "./wireframe-draw";
+import {
+  ANCHOR_EPSILON,
+  anchorSiteForJoint,
+  nodeIndexForJoint,
+  segmentsAnchor,
+} from "./wireframe-model";
+
+/**
+ * The model and the painter split out of this file when it passed 900 lines;
+ * this stays the one import for all three, so callers never have to know which
+ * of the three a name lives in.
+ */
+export type { Palette, Runtime, SubjectTone } from "./wireframe-draw";
+export { MARGIN } from "./wireframe-draw";
+export {
+  ANCHOR_EPSILON,
+  anchorSiteForJoint,
+  loadWireframe,
+  nodeIndexForJoint,
+  nodeNameForJoint,
+  resetWireframeCacheForTests,
+  segmentsAnchor,
+  segmentsBoxCenter,
+  useWireframeModel,
+  WIREFRAME_URL,
+  type AnchorSite,
+} from "./wireframe-model";
 
 /**
  * The elevation, drawn from the model the robot is actually made of.
@@ -123,9 +148,6 @@ import { type WireframeData } from "@/lib/wireframe/types";
  * surface, so it is the occluder, never the occluded.
  */
 
-/** Where the extracted edge set lives. Fetched lazily; never bundled. */
-export const WIREFRAME_URL = "/models/chassis-wireframe.json";
-
 /** Turntable rate. Slow on purpose — see the header. */
 const YAW_RATE_RAD_S = (3 * Math.PI) / 180;
 
@@ -137,28 +159,6 @@ const KEY_STEP_RAD = Math.PI / 12;
 
 const TWO_PI = Math.PI * 2;
 
-/** Inset kept clear of the box on every side, CSS px. */
-const MARGIN = 6;
-
-/** The subject module. It does not defer to anything, on any tier. */
-const ALPHA_SUBJECT = 0.95;
-
-/**
- * How the figure is currently drawing the joint the scan is about.
- *
- * The module the diagnostic singled out is always the one thing on this drawing
- * that ignores the depth ladder — but *which colour* it ignores it in is a fact
- * about the diagnosis, not about the drawing. It is `alert` from the flag
- * onward, and `nominal` once the machine's own re-measure has put the channel
- * back inside its envelope. A red limb under a verdict card reading CLEARED was
- * the last surface on this board still reporting a fault nobody has.
- *
- * Two values rather than a `restored` boolean, because the drawing does not
- * need to know what a recalibration is: it is told which token to stroke the
- * subject in, the way every other element in machine space is.
- */
-export type SubjectTone = "alert" | "nominal";
-
 /** Sweep-lift window, matched to the waveform deck's reveal. */
 const LIFT_MS = 1400;
 
@@ -168,9 +168,6 @@ const LIFT_MS = 1400;
  * the value settles between steps and those frames do no work at all.
  */
 const LIFT_STEP_MS = LIFT_MS / LIFT_BOOST;
-
-/** Shared stand-in so the two classification sweeps can never disagree. */
-const EMPTY = new Float32Array(0);
 
 /** Sentinel: this channel was already history when the elevation mounted. */
 const SEEDED = 0;
@@ -191,229 +188,8 @@ const SEEDED = 0;
  */
 const PENDING = -1;
 
-/** Below this the anchor has not really moved; do not touch the leader line. */
-const ANCHOR_EPSILON = 0.15;
-
 /** Gap the leader line keeps between the figure's edge and its vertical run. */
 const LEADER_CLEARANCE = 5;
-
-// ---------------------------------------------------------------------------
-// Model loading
-// ---------------------------------------------------------------------------
-
-let resolved: WireframeData | null = null;
-let inFlight: Promise<WireframeData> | null = null;
-
-/**
- * Fetch + validate the edge set, once per page.
- *
- * Module-scoped rather than per-mount because the board is reconstructed
- * whenever the session is (a mid-scan reload, a reconnect that replays the
- * emitted prefix): re-parsing 2,062 vertices on every remount to get the same
- * answer would be work with no output. A failure clears the cache so a later
- * mount may try again, and is otherwise silent — the SVG elevation is a
- * complete drawing, not an error state, so there is nothing to report.
- */
-export function loadWireframe(): Promise<WireframeData> {
-  // "no-cache" = always revalidate, never re-download unchanged bytes: the
-  // server answers 304 against the ETag unless the file really changed.
-  // The original "force-cache" pinned the FIRST wireframe a browser ever saw
-  // forever — after the model was remodeled, the board kept drawing the old
-  // robot while the GLB viewer (default fetch semantics) showed the new one.
-  // User-hit 2026-08-24. One conditional request per page load is the cost.
-  inFlight ??= fetch(WIREFRAME_URL, { cache: "no-cache" })
-    .then((res) => {
-      if (!res.ok) throw new Error(`chassis-wireframe: HTTP ${res.status}`);
-      return res.json();
-    })
-    .then((json: unknown) => {
-      const data = parseWireframe(json);
-      resolved = data;
-      return data;
-    })
-    .catch((error: unknown) => {
-      inFlight = null;
-      throw error;
-    });
-  return inFlight;
-}
-
-/** Drop the cache. Tests only — the app fetches once and keeps it. */
-export function resetWireframeCacheForTests(): void {
-  resolved = null;
-  inFlight = null;
-}
-
-/**
- * The parsed model, or null while it is still coming (or if it never does).
- *
- * Seeded synchronously from the module cache so a board that remounts mid-scan
- * comes back with the wireframe already up — no flash of the SVG fallback on
- * the one frame a reader is most likely to be looking at it.
- */
-export function useWireframeModel(): WireframeData | null {
-  const [model, setModel] = React.useState<WireframeData | null>(() => resolved);
-
-  React.useEffect(() => {
-    if (model) return;
-    let alive = true;
-    loadWireframe().then(
-      (data) => {
-        if (alive) setModel(data);
-      },
-      () => {
-        // Keep the SVG elevation. See loadWireframe.
-      },
-    );
-    return () => {
-      alive = false;
-    };
-  }, [model]);
-
-  return model;
-}
-
-// ---------------------------------------------------------------------------
-// Model geometry helpers (pure — tested directly)
-// ---------------------------------------------------------------------------
-
-/**
- * Which node of the model a wire joint belongs to.
- *
- * The extraction splits the two knee actuators out as their own nodes because
- * they are what the scan flags; a hip or an ankle has no module of its own, so
- * it resolves to the leg it is part of. Anything the model does not carry
- * resolves to null and simply does not tint.
- */
-export function nodeNameForJoint(joint: string | null | undefined): string | null {
-  if (!joint) return null;
-  if (joint === "knee_L" || joint === "knee_R") {
-    return `knee_actuator_${joint.slice(-1)}`;
-  }
-  if (joint.endsWith("_L")) return "leg_L";
-  if (joint.endsWith("_R")) return "leg_R";
-  return null;
-}
-
-/**
- * Index into `data.nodes` of the node a joint tints, or -1.
- *
- * Resolved once per (model, joint) rather than per frame: the draw wants an
- * integer to compare against, not a map lookup and a string compare 2,404
- * times a frame.
- */
-export function nodeIndexForJoint(
-  data: WireframeData | null,
-  joint: string | null | undefined,
-): number {
-  if (!data) return -1;
-  const name = nodeNameForJoint(joint);
-  if (!name) return -1;
-  const node = data.byName.get(name);
-  return node ? data.nodes.indexOf(node) : -1;
-}
-
-/**
- * Centre of the projected bounding box of one node's segments, written into
- * `out`. Returns false for an empty segment list, leaving `out` untouched.
- *
- * This is where the magenta leader line points. The bbox centre rather than the
- * mean of the endpoints, because the endpoints are not evenly distributed
- * around the module — the actuator's ring of edges is dense at its rim — and a
- * centroid would sit visibly off-centre inside its own outline.
- */
-export function segmentsBoxCenter(
-  seg: Float32Array | undefined,
-  out: { x: number; y: number },
-): boolean {
-  if (!seg || seg.length < 4) return false;
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (let i = 0; i < seg.length; i += 2) {
-    const x = seg[i] ?? 0;
-    const y = seg[i + 1] ?? 0;
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  }
-  out.x = (minX + maxX) / 2;
-  out.y = (minY + maxY) / 2;
-  return true;
-}
-
-/**
- * Where on its node a joint's leader line lands.
- *
- * A knee is its own module, so its box centre is the joint. A hip or an ankle
- * shares the leg node with the whole limb, and the middle of a shin is not an
- * ankle: the line lands in the band of the limb where the joint actually is —
- * the top of the leg for a hip, just above the foot for an ankle.
- */
-export type AnchorSite = "center" | "top" | "bottom";
-
-export function anchorSiteForJoint(joint: string | null | undefined): AnchorSite {
-  if (!joint) return "center";
-  if (joint.startsWith("ankle")) return "bottom";
-  if (joint.startsWith("hip")) return "top";
-  return "center";
-}
-
-/**
- * The joint bands as fractions of the node's projected height, measured from
- * the limb's end. A hip is at the very top of its leg; an ankle sits above the
- * foot, so its band starts a tenth of the way up.
- */
-const SITE_BAND = {
-  top: { near: 0, far: 0.14 },
-  bottom: { near: 0.1, far: 0.24 },
-} as const;
-
-/**
- * The leader line's anchor for one node's segments, written into `out`:
- * the box centre for a module, or the centre of the joint band for a limb.
- * Falls back to the box centre when the band holds no endpoint.
- */
-export function segmentsAnchor(
-  seg: Float32Array | undefined,
-  out: { x: number; y: number },
-  site: AnchorSite,
-): boolean {
-  if (!segmentsBoxCenter(seg, out) || !seg) return false;
-  if (site === "center") return true;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (let i = 1; i < seg.length; i += 2) {
-    const y = seg[i] ?? 0;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  }
-  const h = maxY - minY;
-  if (h <= 0) return true;
-  // Canvas y grows downward: "bottom" is the largest y.
-  const band = SITE_BAND[site];
-  const lo = site === "bottom" ? maxY - band.far * h : minY + band.near * h;
-  const hi = site === "bottom" ? maxY - band.near * h : minY + band.far * h;
-  let bMinX = Infinity;
-  let bMaxX = -Infinity;
-  let bMinY = Infinity;
-  let bMaxY = -Infinity;
-  for (let i = 0; i < seg.length; i += 2) {
-    const y = seg[i + 1] ?? 0;
-    if (y < lo || y > hi) continue;
-    const x = seg[i] ?? 0;
-    if (x < bMinX) bMinX = x;
-    if (x > bMaxX) bMaxX = x;
-    if (y < bMinY) bMinY = y;
-    if (y > bMaxY) bMaxY = y;
-  }
-  if (bMinX === Infinity) return true;
-  out.x = (bMinX + bMaxX) / 2;
-  out.y = (bMinY + bMaxY) / 2;
-  return true;
-}
 
 // ---------------------------------------------------------------------------
 // The component
@@ -442,36 +218,6 @@ export interface WireframeElevationProps {
    */
   onAnchorChange?: (x: number, y: number, clearX: number) => void;
   className?: string;
-}
-
-type Palette = { ink: string } & Record<SubjectTone, string>;
-
-interface Runtime {
-  ctx: CanvasRenderingContext2D | null;
-  w: number;
-  h: number;
-  dpr: number;
-  yaw: number;
-  lastNow: number;
-  fig: ProjectedFigure | null;
-  /** Ladder level per global segment id, or L_SKIP. Sized per model shape. */
-  level: Uint8Array;
-  /** Segment ids bucketed by level, `(node << 16) | edge`. Same sizing. */
-  order: Uint32Array;
-  /** Nine-slot histogram and its exclusive prefix sum — the counting sort. */
-  counts: Int32Array;
-  starts: Int32Array;
-  /** Right edge of everything drawn this frame, accumulated during the strokes. */
-  maxX: number;
-  /** -1 forces the next frame to draw. */
-  drawnYaw: number;
-  drawnFlag: number;
-  /** The tone the subject was last stroked in; a change repaints. */
-  drawnTone: SubjectTone | null;
-  drawnLift: number;
-  drawnBoost: number;
-  drawnW: number;
-  drawnH: number;
 }
 
 export function WireframeElevation({
@@ -809,162 +555,4 @@ export function WireframeElevation({
       <canvas ref={canvasRef} role="img" aria-label={label} className="block size-full" />
     </div>
   );
-}
-
-/**
- * One frame: project, bucket every segment onto the luminance ladder, then one
- * `beginPath`/`stroke` per occupied level, dimmest first — so the flagged
- * module composites over whatever crosses it rather than under. Nothing in
- * here allocates once the model's shape has been seen.
- */
-function draw(
-  rt: Runtime,
-  data: WireframeData,
-  pal: Palette,
-  flagged: number,
-  tone: SubjectTone,
-  liftIndex: number,
-  liftBoost: number,
-  opts: { yawRad: number; viewport: { w: number; h: number }; margin: number },
-): void {
-  const ctx = rt.ctx;
-  if (!ctx || rt.w <= 0 || rt.h <= 0) return;
-  if (rt.w <= 2 * MARGIN || rt.h <= 2 * MARGIN) return;
-
-  opts.yawRad = rt.yaw;
-  opts.viewport.w = rt.w;
-  opts.viewport.h = rt.h;
-  const fig = projectWireframe(data, opts, rt.fig ?? undefined);
-  rt.fig = fig;
-
-  const total = fig.segmentCount;
-  if (rt.level.length !== total) {
-    rt.level = new Uint8Array(total);
-    rt.order = new Uint32Array(total);
-  }
-  const level = rt.level;
-  const order = rt.order;
-  const counts = rt.counts;
-  const starts = rt.starts;
-  counts.fill(0);
-
-  const dMin = fig.depthMin;
-  const dScale = depthScale(dMin, fig.depthMax);
-  const nodeCount = fig.xy.length;
-
-  // --- sweep 1: classify, and histogram the ladder --------------------------
-  // Both sweeps walk the same node-major sequence and derive the global
-  // segment id `g` from it, so they must agree on every node's length — hence
-  // the shared `?? EMPTY` rather than a `continue` that would desynchronise
-  // them if the projector ever handed back a half-built figure.
-  let g = 0;
-  for (let n = 0; n < nodeCount; n += 1) {
-    const face = fig.facing[n] ?? EMPTY;
-    const deep = fig.depth[n] ?? EMPTY;
-    const count = face.length;
-    if (n === flagged) {
-      // Drawn last, in alert, at full strength. It never recedes, never
-      // ghosts, and never joins a depth band: the one thing on this board
-      // that is allowed to ignore which way it is pointing.
-      for (let i = 0; i < count; i += 1, g += 1) level[g] = L_SKIP;
-      continue;
-    }
-    const boost = n === liftIndex ? liftBoost : 0;
-    for (let i = 0; i < count; i += 1, g += 1) {
-      const lv = levelFor(face[i] ?? 0, deep[i] ?? 0, dMin, dScale, boost);
-      level[g] = lv;
-      counts[lv] = (counts[lv] ?? 0) + 1;
-    }
-  }
-
-  // --- exclusive prefix sum over nine slots ---------------------------------
-  let acc = 0;
-  for (let l = 0; l < LEVELS; l += 1) {
-    starts[l] = acc;
-    acc += counts[l] ?? 0;
-  }
-
-  // --- sweep 2: scatter into level order ------------------------------------
-  // `starts` is left intact for the draw; the cursor rides in `order` itself
-  // via a second local walk of the same node-major sequence that built it.
-  g = 0;
-  for (let n = 0; n < nodeCount; n += 1) {
-    const count = (fig.facing[n] ?? EMPTY).length;
-    for (let i = 0; i < count; i += 1, g += 1) {
-      const lv = level[g] ?? L_SKIP;
-      if (lv === L_SKIP) continue;
-      const at = starts[lv] ?? 0;
-      starts[lv] = at + 1;
-      order[at] = (n << 16) | i;
-    }
-  }
-  // starts[l] now points one past level l's last slot: rewind it to the head.
-  for (let l = 0; l < LEVELS; l += 1) starts[l] = (starts[l] ?? 0) - (counts[l] ?? 0);
-
-  // --- draw ------------------------------------------------------------------
-  ctx.clearRect(0, 0, rt.w, rt.h);
-  ctx.lineWidth = 1;
-  ctx.lineCap = "butt";
-  ctx.lineJoin = "miter";
-  ctx.strokeStyle = pal.ink;
-  let maxX = 0;
-
-  for (let l = 0; l < LEVELS; l += 1) {
-    const count = counts[l] ?? 0;
-    if (count === 0) continue;
-    const from = starts[l] ?? 0;
-    const to = from + count;
-    ctx.globalAlpha = LEVEL_ALPHA[l] ?? 1;
-    ctx.beginPath();
-    for (let k = from; k < to; k += 1) {
-      const packed = order[k] ?? 0;
-      const seg = fig.xy[packed >>> 16];
-      if (!seg) continue;
-      const o = (packed & 0xffff) * 4;
-      const x0 = seg[o] ?? 0;
-      const x1 = seg[o + 2] ?? 0;
-      if (x0 > maxX) maxX = x0;
-      if (x1 > maxX) maxX = x1;
-      ctx.moveTo(x0, seg[o + 1] ?? 0);
-      ctx.lineTo(x1, seg[o + 3] ?? 0);
-    }
-    ctx.stroke();
-  }
-
-  rt.maxX = maxX;
-  if (flagged >= 0) {
-    // The subject's own token, chosen by the caller. The module is still drawn
-    // last and still ignores the ladder — being *restored* does not make it one
-    // of the fourteen things nobody looked at.
-    ctx.strokeStyle = pal[tone];
-    ctx.globalAlpha = ALPHA_SUBJECT;
-    ctx.beginPath();
-    path(ctx, fig.xy[flagged], rt);
-    ctx.stroke();
-  }
-
-  ctx.globalAlpha = 1;
-}
-
-/**
- * Append one node's quads to the open path, tracking the figure's right edge
- * as it goes — the leader line needs it, and this loop already has every x in
- * a register.
- */
-function path(
-  ctx: CanvasRenderingContext2D,
-  seg: Float32Array | undefined,
-  rt: Runtime,
-): void {
-  if (!seg) return;
-  let max = rt.maxX;
-  for (let i = 0; i < seg.length; i += 4) {
-    const x0 = seg[i] ?? 0;
-    const x1 = seg[i + 2] ?? 0;
-    if (x0 > max) max = x0;
-    if (x1 > max) max = x1;
-    ctx.moveTo(x0, seg[i + 1] ?? 0);
-    ctx.lineTo(x1, seg[i + 3] ?? 0);
-  }
-  rt.maxX = max;
 }

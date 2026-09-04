@@ -124,8 +124,12 @@
   --surface-2: #111111;
   --ink: var(--phosphor);
   --ink-soft: color-mix(in srgb, var(--phosphor) 68%, var(--void));
-  /* The dimmest luminance tier; the operator --muted ruling does not apply here. */
-  --muted: color-mix(in srgb, var(--phosphor) 52%, var(--void));
+  /* The dimmest luminance tier. Not the operator ruling — phosphor on void is
+     a different problem — but the same floor: at 52% this was 4.44:1, under AA
+     for body text, and machine space sets whole paragraphs in it. 55% is
+     4.90:1 and still three clear luminance steps below --ink (15.2:1) and
+     --ink-soft (7.1:1), which is what the hierarchy is made of. */
+  --muted: color-mix(in srgb, var(--phosphor) 55%, var(--void));
   --line: var(--grid);
   --line-strong: color-mix(in srgb, var(--phosphor) 34%, var(--void));
   /* The operator token's twin: grouping, not severity. */

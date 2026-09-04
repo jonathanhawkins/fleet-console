@@ -40,3 +40,4 @@ export { useMarkUnitVisited } from "./first-visit-nudge";
 /* -- the shell's wiring --------------------------------------------------- */
 export { TelemetryProvider } from "./telemetry-provider";
 export { SimReset } from "./sim-reset";
+export { StorylineJump } from "./storyline-jump";

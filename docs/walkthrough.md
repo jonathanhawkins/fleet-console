@@ -6,7 +6,16 @@ a fleet-wide rollout, and a calibration that works. They run whether or not you 
 arc fits inside six minutes. Timings are from page load; _Reset simulation_
 in the footer replays everything from the same seed.
 
+**Or skip to the act you want.** _Jump to_ in the footer — _Knee fault_,
+_Blocked route_, _Firmware cohort_, _Ankle offset_ — replays the run from the
+top and stops eight seconds short of that act's first beat, so the alert still
+arrives while you are watching and the fleet still carries everything that
+would already have happened by then. Pressing the same act twice lands on the
+same board both times.
+
 ## Act 1 — one robot, escalating (0:15 → 1:15)
+
+![The fleet page with N-07 in attention: the map marker, the rail row and the alert feed all carrying the same amber.](evidence/stills/fleet-alert.png)
 
 The fleet is calm: eight units, a steady KPI band, and a `LIVE` chip in the
 header that is the transport reporting its own state. At **0:15** the sim
@@ -27,6 +36,10 @@ curve into ten seconds so the forecast pays off on camera.
 knee's temperature sits well above every other joint and its torque and current
 traces have gone ragged. **Press Run diagnostic** — the one black pill in the
 product, and the only primary action on the page.
+
+![The unit page for N-07: eighteen canvas instruments, the left knee's three traces running warm, and the incident banner offering Run diagnostic.](evidence/stills/unit-incident.png)
+
+![The verdict in machine space: KNEE_L · ACTUATOR A-07, gain anomaly, with the evidence pair and the recommended actions beneath it.](evidence/stills/descent-verdict.png)
 
 **The descent.** The operator page drains over 200 ms, a black surface wipes up
 in 350 ms, and the type boots in phosphor mono. (`prefers-reduced-motion` swaps
@@ -54,6 +67,10 @@ highlights the left knee actuator on the chassis. In incident history, press the
 `INC-N07-…` reference for the full report: chronology, the RMS/gain table, the
 waveform exhibits, and a print stylesheet, because it is what an operator hands
 to a technician.
+
+![The component view after the ascent: the chassis in 3D with the left knee actuator picked out.](evidence/stills/component-view.png)
+
+![The incident report: chronology, the per-joint RMS and gain table, the subject-versus-control waveform exhibits, and the service record.](evidence/stills/incident-report.png)
 
 ## Act 2 — the fleet handling itself (2:00 → 2:40)
 

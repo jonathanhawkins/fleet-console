@@ -12,7 +12,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
  * (roles and visible text, bounded polls), never by sleeping to a timestamp:
  * the test cares that the amber alert *arrives and is shown*, not when.
  *
- * One spec on purpose (PRD §6, Phase 6): this walk IS the product. Anything
+ * One spec on purpose (PRD §6): this walk IS the product. Anything
  * it does not cover is covered by the 334 vitest specs underneath it.
  */
 

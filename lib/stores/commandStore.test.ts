@@ -373,7 +373,7 @@ describe("command store — the fleet slice", () => {
     expect(selectFleetCommand("ROLLBACK_COHORT")(s())).toBeUndefined();
   });
 
-  it("audits the Phase 11 kinds: rollback-started/complete, rollout-halted (the receipt note), command-failed", () => {
+  it("audits the fleet-scoped kinds: rollback-started/complete, rollout-halted (the receipt note), command-failed", () => {
     const s = () => useCommandStore.getState();
     s().applyFleetCommandEvent(fleetEv("ROLLBACK_COHORT", 1, { k: "accepted" }));
     s().applyFleetCommandEvent(

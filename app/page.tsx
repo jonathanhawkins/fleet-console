@@ -21,7 +21,7 @@ import {
  * number that actually changed, and never the page.
  *
  * No black pill on this screen — with exactly one exception, and it is the
- * exception the rule was always going to grow (Phase 11). "Run diagnostic"
+ * exception the rule was always going to grow. "Run diagnostic"
  * belongs to the unit that is failing, not to the fleet; when a firmware cohort
  * forms, the thing that is failing IS the fleet, and the pill goes on the card
  * that says so (cohort-card.tsx). It leaves with the incident.
@@ -87,7 +87,7 @@ export default function FleetPage() {
           <FleetKpis />
         </dl>
 
-        {/* The fleet incident, when there is one (Phase 11).
+        {/* The fleet incident, when there is one.
 
             Above the three regions rather than inside the feed's column, and
             that placement is the argument: a cohort changes the subject of the

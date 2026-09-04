@@ -1,5 +1,12 @@
 # Fleet Console, PRD
 
+> **This is the plan as it was written before the build, kept unedited.** It is
+> here because the interesting thing about a spec is where it turned out to be
+> wrong, and that is only legible if it still says what it said. What actually
+> shipped is in [the README](../../README.md); the gap is summarised under
+> [§6](#6-phases). Phase numbering is this document's own and appears nowhere
+> in the code.
+
 A demo fleet-operations platform for home humanoid robots, built as a design and engineering showcase. An original, fictional product inspired by consumer home-robot design. No company names and no third-party logos, renders, or assets anywhere in the shipped app; our robot is our own stylized silhouette, units are named "N-07" style.
 
 Every phase maps to one of four outcomes: real-time visibility and control of robots (individual and fleets), intuitive dashboards and workflows, performance and reliability, and a component library built on engineering best practices.
@@ -8,9 +15,9 @@ Every phase maps to one of four outcomes: real-time visibility and control of ro
 
 The product has two visual worlds, and the transition between them is the signature of the entire demo. Spend the boldness there and nowhere else.
 
-**Operator space (light).** The default UI. Calm, warm white, consumer-grade. This is the house-and-family world consumer robotics sells: an operator glances at it the way you glance at a thermostat. Reference: `operator-factory-isometric-lightmode.png`, `operator-hero-lightmode-palette.png`, `operator-careers-page-typography.png`.
+**Operator space (light).** The default UI. Calm, warm white, consumer-grade. This is the house-and-family world consumer robotics sells: an operator glances at it the way you glance at a thermostat. Reference: the operator-space notes in [docs/images/REFERENCES.md](../images/REFERENCES.md) (the captures themselves are third-party material and stay local).
 
-**Machine space (dark).** What the robot itself reports when something is wrong. Entering diagnostics is a descent: the page dims, a black surface wipes up, and the type switches to phosphor mono. This is the Evangelion language: per-component OPERATING/DAMAGED boards, waveform strips, a program-walk log. Reference: `eva-parts-status-operating-damaged.png` (the key one), `eva-brainwave-waveforms.png`, `eva-magi-program-flow-green.png`, and the rest of the eva-* set.
+**Machine space (dark).** What the robot itself reports when something is wrong. Entering diagnostics is a descent: the page dims, a black surface wipes up, and the type switches to phosphor mono. This is the Evangelion language: per-component OPERATING/DAMAGED boards, waveform strips, a program-walk log. Reference: the machine-space notes in [docs/images/REFERENCES.md](../images/REFERENCES.md).
 
 The UX meaning of the contrast: crossing from monitoring into diagnosis. The operator always knows which world they are in. Everything outside the descent stays quiet and disciplined; no neon leaks into operator space, no rounded pills leak into machine space.
 
@@ -145,6 +152,23 @@ Tokens as CSS variables, two themes on `[data-space="operator" | "machine"]`.
 **Phase 5, Stretch (weekend, only if 0 to 4 are done and solid).** In order: (a) point-cloud room view, one open indoor scan decimated to under 400k points, robot position marker; (b) incident replay, a canned clip labeled INCIDENT REPLAY on the verdict card; (c) a ninth unit backed by the real ESP32 recorder streaming true device telemetry through the same transport, one physical device on a simulated fleet.
 
 **Phase 6, Hardening and ship (final evening).** Perf pass with numbers in the README (bundle sizes, fps under load, message throughput), Lighthouse run, Playwright golden-path e2e green, deploy static build with WorkerTransport, record the 90-second demo video following the golden path, README with architecture diagram, design thesis, perf notes, and the simulated-data disclaimer.
+
+### What shipped against this, and what did not
+
+Phases 0 to 4 and 6 shipped, and the storyline grew past them: the plan had one
+incident, and the sim now runs four on one clock (a self-recovering navigation
+fault, a firmware cohort with a fleet-wide rollback, and the encoder offset a
+recalibration actually fixes — the counterweight to the knee's `PARTIAL`).
+Commands, an audit trail, an incident report, and the design-system gallery as
+real documentation were all beyond the plan.
+
+**Phase 5 was cut in full, on the guardrail in §2**, and none of it is in the
+app: no point-cloud room view, no incident replay, and no ESP32-backed ninth
+unit. The fleet is eight simulated robots and says so on every page.
+
+The estimates were the least accurate part of this document. Nothing here
+costed the hardening — accessibility across two colour spaces, reduced motion,
+the failure paths, the budget work — which took longer than the features did.
 
 ## 7. Performance requirements (claims need receipts)
 

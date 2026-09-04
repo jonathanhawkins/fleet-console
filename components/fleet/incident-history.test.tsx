@@ -6,9 +6,9 @@ import { IncidentHistory } from "./incident-history";
 import { incidentReportSnapshot, resetIncidentReport } from "./incident-report";
 
 /**
- * The row the whole golden path exists to produce. Two Phase 10 additions are
- * pinned here: it says how long the incident took, and its reference
- * is the way into the full report.
+ * The row the whole golden path exists to produce. Two claims are pinned
+ * here: it says how long the incident took, and its reference is the way into
+ * the full report.
  */
 
 const T0 = 1_700_000_000_000;

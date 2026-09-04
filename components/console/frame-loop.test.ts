@@ -3,7 +3,7 @@ import { frameSubscriberCount, registerFrame } from "./frame-loop";
 
 /**
  * The loop is shared infrastructure: eighteen strips today, six waveforms and
- * a descent overlay in Phase 3. What has to hold is that it stays *one* loop,
+ * a descent overlay. What has to hold is that it stays *one* loop,
  * that it stops when nobody is drawing, and that one broken instrument cannot
  * take the others down — the failure mode of a shared scheduler is total, and
  * the whole page going still because one canvas threw would be a much worse

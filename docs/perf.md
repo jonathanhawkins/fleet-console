@@ -1,8 +1,8 @@
 # Performance receipts
 
 > Budget rows below are the output of `node scripts/check-budgets.mjs` on the
-> static export built 2026-09-03 (`/` 185.7 KB gz over 15 scripts,
-> `/unit/N-01` 193.9 KB gz over 16). The same check runs at the end of every
+> static export built 2026-09-03 (`/` 178.1 KB gz over 14 scripts,
+> `/unit/N-01` 187.1 KB gz over 16). The same check runs at the end of every
 > `pnpm e2e` and in CI, so these two numbers are enforced rather than
 > remembered. Two moves account for most of the growth from the first
 > 173.8 / 175.1 KB build: the incident-history, cohort and trend-watch work
@@ -21,7 +21,7 @@ via Playwright 1.55 (headless) for runtime probes; Lighthouse 12 desktop preset 
 scores. Gzip figures are `gzip -9` of the exact bytes the server sends per file, summed
 per page — not an estimator.
 
-## Budgets (PRD §7 + Phase 4 DoD)
+## Budgets (PRD §7)
 
 `pnpm budgets` (`scripts/check-budgets.mjs`, zero-dep, appended to `pnpm e2e`) parses
 each exported route's modern-browser script set and fails the run past **200 KB gz** —
@@ -29,8 +29,8 @@ the PRD §7 line itself, not current usage.
 
 | Budget | Measured | Verdict |
 | --- | --- | --- |
-| Fleet page initial JS < 200 KB gz | **185.7 KB gz** (modern browsers; 15 files) | **PASS** |
-| Unit page initial JS < 200 KB gz | **193.9 KB gz** (16 files) | **PASS** |
+| Fleet page initial JS < 200 KB gz | **178.1 KB gz** (modern browsers; 14 files) | **PASS** |
+| Unit page initial JS < 200 KB gz | **187.1 KB gz** (16 files) | **PASS** |
 | 60 fps during the descent | p95 frame **9.2 ms**, 1 of 974 frames > 16.7 ms (0.1%) | **PASS** |
 | Interaction latency < 100 ms | Run-diagnostic press → visible feedback **1.3 ms** | **PASS** |
 | Component view (three + GLB) < 500 KB gz | 249.4 + 72.3 = **321.7 KB gz**, lazy | **PASS** |
@@ -45,8 +45,8 @@ request it).
 
 | Route | Next "First Load JS" | Measured JS (gz) | CSS (gz) | HTML (gz) |
 | --- | --- | --- | --- | --- |
-| `/` (fleet) | 190 kB | **185.7 KB** | 11.4 KB | 3.8 KB |
-| `/unit/[id]` | 198 kB | **193.9 KB** | 11.4 KB | 3.4 KB |
+| `/` (fleet) | 190 kB | **178.1 KB** | 15.0 KB | 4.5 KB |
+| `/unit/[id]` | 198 kB | **187.1 KB** | 15.0 KB | 7.4 KB |
 | legacy-only polyfill (`noModule`) | — | 38.5 KB | — | — |
 
 `zod/mini` holds both routes under budget: the schema layer and worker-host protocol
@@ -190,6 +190,17 @@ receipts is the worker path.
 Kept for the method — most of it a **paired A/B in one process**, so machine drift
 cancels rather than landing in the delta — stated once each, newest number first where a
 figure above superseded an earlier one.
+
+**Bundle: dropping `d3-scale`.** `stripScales()` imported one function,
+`scaleLinear`, and the only thing ever called on its result was `scale(value)`
+— no ticks, no `invert`, no `nice`, no `tickFormat`. That is eight lines of
+arithmetic pulling d3-array, d3-format, d3-interpolate, d3-time and
+d3-time-format into the initial bundle of both routes. Replacing it with a
+local linear scale (matching d3's degenerate-domain behaviour, which maps a
+zero-width domain to the range's midpoint) measured **−8.0 KB gz** on `/` and
+**−7.3 KB gz** on `/unit/N-01` — paired builds of the same tree, differing only
+in that import — and took the unit route's headroom from 5.6 KB to 12.9 KB. All
+53 strip and hover specs green before and after.
 
 **Bundle: `zod/mini`.** Before this pass the fleet page measured **227.2 KB gz**
 (maplibre was already split out). The culprit was classic `zod`: the method-chained v4

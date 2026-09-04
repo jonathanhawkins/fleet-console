@@ -6,7 +6,7 @@ import { type SectionLabelProps } from "@/components/console";
 /**
  * ## Reading, not rewriting
  *
- * One more job landed here with Phase 10: collapsing the rows that say the same
+ * One more job landed here later: collapsing the rows that say the same
  * thing about the same moment. The store is right to hold both — two alerts
  * were resolved, and each one's closure is a fact with its own ref — and the
  * *reader* is right to see one line, because "resolved, resolved" at 19:42:47
@@ -85,7 +85,7 @@ export const AUDIT_TAG: Record<AuditKind, AuditTag> = {
   "command-accepted": { label: "Command", tone: "muted" },
   "command-complete": { label: "Command", tone: "muted" },
   "command-failed": { label: "Refused", tone: "alert" },
-  // Phase 11 fleet-scoped kinds, toned by the same two directions: a detected
+  // Fleet-scoped kinds, toned by the same two directions: a detected
   // cohort is the situation widening (the fleet-level escalation); the halt
   // and the finished rollback are it contracting; a rollback merely starting
   // has not moved it yet.

@@ -134,7 +134,7 @@ export function FleetUnitCount() {
     return unit !== undefined && matchesFilter(unit, query);
   }).length;
   return (
-    <span className="text-label text-ink-soft uppercase tnum">
+    <span className="tnum text-label text-ink-soft uppercase">
       {shown} of {unitIds.length}
     </span>
   );
@@ -174,8 +174,9 @@ export function FleetRailFilterField() {
       placeholder="Search units"
       aria-label="Search units"
       className={cn(
-        "h-8 min-w-0 max-w-32 flex-1 rounded-pill border border-line bg-bg px-3.5",
-        "text-small text-ink placeholder:text-ink-muted sm:max-w-44",
+        "h-8 max-w-32 min-w-0 flex-1 rounded-pill border border-line bg-bg px-3.5",
+        // A placeholder is text: --ink-soft, not the 3.31:1 --muted.
+        "text-small text-ink placeholder:text-ink-soft sm:max-w-44",
       )}
     />
   );

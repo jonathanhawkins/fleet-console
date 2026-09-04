@@ -67,7 +67,7 @@ describe("unitSummarySchema", () => {
     expect(unitSummarySchema.parse(unit)).toEqual(unit);
   });
 
-  it("accepts three-digit scale ids and optional posture (additive, Phase 10)", () => {
+  it("accepts three-digit scale ids and optional posture", () => {
     expect(unitSummarySchema.safeParse({ ...unit, id: "N-500" }).success).toBe(true);
     expect(unitSummarySchema.parse({ ...unit, posture: "sitting" }).posture).toBe(
       "sitting",
@@ -78,7 +78,7 @@ describe("unitSummarySchema", () => {
     );
   });
 
-  it("accepts optional fw and fwPending semvers (additive, Phase 11) and rejects malformed ones", () => {
+  it("accepts optional fw and fwPending semvers and rejects malformed ones", () => {
     expect(unitSummarySchema.parse(unit).fw).toBeUndefined(); // pre-firmware snapshots stay valid
     const rolled = unitSummarySchema.parse({ ...unit, fw: "2.4.1" });
     expect(rolled.fw).toBe("2.4.1");

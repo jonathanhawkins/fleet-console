@@ -38,7 +38,7 @@ export const TOKEN_FALLBACK = {
     "--bg": "#060606",
     "--ink": "#3bff6f",
     "--ink-soft": "#2aaf4d",
-    "--muted": "#22873d",
+    "--muted": "#238f40",
     "--line": "#1c1c1c",
     "--nominal": "#3bff6f",
     "--warn": "#ffb000",

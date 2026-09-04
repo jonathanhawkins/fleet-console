@@ -254,7 +254,7 @@ describe("worker host — determinism (Playwright's contract)", () => {
   });
 });
 
-describe("worker host — Phase 10 parity (units knob + SAFE SIT)", () => {
+describe("worker host — parity with the ws server (units knob + SAFE SIT)", () => {
   it("honors the units init knob — the NEXT_PUBLIC_SIM_UNITS twin of SIM_UNITS", () => {
     const port = new FakePort();
     startSimWorkerHost(port);
@@ -324,7 +324,7 @@ describe("worker host — Phase 10 parity (units knob + SAFE SIT)", () => {
   });
 });
 
-describe("worker host — Phase 11 parity (firmware cohort)", () => {
+describe("worker host — parity with the ws server (firmware cohort)", () => {
   it("repins the cohort via init.cohort (the SIM_COHORT_* twins): distribution, staggered signature, halt receipt, staged rollback", () => {
     const port = new FakePort();
     startSimWorkerHost(port);

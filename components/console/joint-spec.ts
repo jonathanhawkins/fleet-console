@@ -1,5 +1,3 @@
-import { scaleLinear, type ScaleLinear } from "d3-scale";
-
 /**
  * What the console knows about a leg before any telemetry arrives: the six
  * joints, what to call them in operator space, and the operating envelope each
@@ -49,7 +47,7 @@ export const JOINT_GRID_ORDER = [
 
 /**
  * Operator space says "Left knee", never "knee_L" — the wire's vocabulary is
- * for the machine-space boards in Phase 3, where terse identifiers are the
+ * for the machine-space boards, where terse identifiers are the
  * voice. Unknown joints fall back to their wire name rather than to nothing.
  */
 const JOINT_LABELS: Record<Joint, string> = {
@@ -153,12 +151,36 @@ export function envelope(joint: string, metric: Metric): Envelope {
  * squeezed against the left edge that looks like a broken chart, or a
  * full-width trace that silently restates four seconds of history as sixty.
  *
- * d3-scale for the scales and nothing else (PRD §3): no axes, no ticks, no
- * selections. Rebuilt on resize only.
+ * Scales and nothing else (PRD §3): no axes, no ticks, no selections. Rebuilt
+ * on resize only.
+ *
+ * The plan called for d3-scale here, and for a while it was — but `scaleLinear`
+ * was the only thing ever imported from it and `scale(v)` the only thing ever
+ * called on the result. That is eight lines of arithmetic carrying d3-array,
+ * d3-format, d3-interpolate and two d3-time packages into the initial bundle of
+ * the tightest route in the app. The degenerate-domain case matches d3's
+ * (`normalize` reads a zero-width domain as 0.5, so the output is the range's
+ * midpoint) because that is the one behaviour a reimplementation is likely to
+ * get wrong and never notice.
  */
+export type LinearScale = (value: number) => number;
+
 export interface StripScales {
-  x: ScaleLinear<number, number>;
-  y: ScaleLinear<number, number>;
+  x: LinearScale;
+  y: LinearScale;
+}
+
+function linearScale(
+  [d0, d1]: readonly [number, number],
+  [r0, r1]: readonly [number, number],
+): LinearScale {
+  const span = d1 - d0;
+  if (span === 0) {
+    const mid = r0 + (r1 - r0) * 0.5;
+    return () => mid;
+  }
+  const k = (r1 - r0) / span;
+  return (v) => r0 + (v - d0) * k;
 }
 
 export function stripScales(
@@ -170,11 +192,7 @@ export function stripScales(
   padY = 1,
 ): StripScales {
   return {
-    x: scaleLinear()
-      .domain([-(capacity - 1), 0])
-      .range([0, width]),
-    y: scaleLinear()
-      .domain([env.floor, env.top])
-      .range([height - padY, padY]),
+    x: linearScale([-(capacity - 1), 0], [0, width]),
+    y: linearScale([env.floor, env.top], [height - padY, padY]),
   };
 }

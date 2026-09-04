@@ -238,7 +238,7 @@ describe("VerdictCard", () => {
   /**
    * The healthy verdict.
    *
-   * The sim has served this shape since Phase 3a — `all / all / none`, one
+   * The sim has always served this shape — `all / all / none`, one
    * recommendation reading "No action required" — and until the run control
    * moved out of the incident banner there was no way to reach it from the UI.
    * Everything the card draws for a fault has to *not* be drawn here: no clay,

@@ -151,7 +151,7 @@ describe("sim server + WsTransport over a real socket", () => {
   });
 });
 
-describe("SAFE SIT + fleet scale over a real socket (Phase 10 parity)", () => {
+describe("SAFE SIT + fleet scale over a real socket", () => {
   it("sizes the fleet by `units`, executes the sit, and replays it to a late joiner", async () => {
     const server = await startSimServer({
       port: 0,
@@ -236,7 +236,7 @@ describe("SAFE SIT + fleet scale over a real socket (Phase 10 parity)", () => {
   });
 });
 
-describe("firmware cohort over a real socket (Phase 11 parity)", () => {
+describe("firmware cohort over a real socket", () => {
   it("streams the staggered signature, executes a staged rollback, and replays it to a mid-flight joiner", async () => {
     const server = await startSimServer({
       port: 0,

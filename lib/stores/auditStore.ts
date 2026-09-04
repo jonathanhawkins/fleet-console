@@ -38,7 +38,7 @@ export type AuditKind =
   | "command-accepted"
   | "command-complete"
   | "command-failed"
-  // Phase 11, fleet-scoped: the rollout-cohort record.
+  // Fleet-scoped: the rollout-cohort record.
   | "rollout-halted"
   | "rollback-started"
   | "rollback-complete"

@@ -7,14 +7,14 @@ import * as React from "react";
  * non-negotiable #3).
  *
  * Every canvas instrument in this product — the eighteen TelemetryStrips on a
- * unit page today, the six WaveformStrips of the descent in Phase 3 — draws
+ * unit page, the six WaveformStrips of the descent — draws
  * from this loop. The alternative, a rAF per component, is the standard way a
  * dashboard ends up with twenty schedulers, twenty callbacks the browser has
  * to reconcile against one vsync, and no single place to measure or throttle.
  * Here there is exactly one, it runs only while something is subscribed, and
  * the frame timestamp every subscriber sees is the same instant.
  *
- * The API is deliberately not "a hook that owns a canvas": Phase 3 registers
+ * The API is deliberately not "a hook that owns a canvas": the descent registers
  * callbacks that draw six waveforms into one canvas, and a per-canvas hook
  * would not fit. Register a function, get an unsubscribe.
  *

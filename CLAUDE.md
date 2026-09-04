@@ -27,7 +27,7 @@ The golden path (90 s, rock solid): fleet map → alert → click N-07 → telem
 
 ## Stack
 
-Next 15 (App Router, static-export capable) · React 19 · TS 5 strict · Tailwind 4 (token-driven) · shadcn/ui as primitives · framer-motion (descent + micro only) · zustand · zod · @tanstack/react-virtual · maplibre-gl · d3-scale (scales only) · three/R3F (component view route only) · vitest + RTL · playwright · pnpm.
+Next 15 (App Router, static-export capable) · React 19 · TS 5 strict · Tailwind 4 (token-driven) · shadcn/ui as primitives · framer-motion (descent + micro only) · zustand · zod · @tanstack/react-virtual · maplibre-gl · three/R3F (component view route only) · vitest + RTL · playwright · pnpm.
 
 ## Layout
 
@@ -50,13 +50,19 @@ Next 15 (App Router, static-export capable) · React 19 · TS 5 strict · Tailwi
 
 - Comments explain intent, not history: no issue ids, no review references, no "why the alternative was rejected" essays.
 - Keep files under ~500 lines; split by responsibility before a file becomes a tour.
+  Split on a seam that exists — the wireframe elevation came apart into a model,
+  a painter and a component; the verdict card into the card, its readouts and
+  its action rail. A handful of files sit over the line anyway, and stay there
+  on purpose: `verdict-sheet.tsx` and `descent-stage.tsx` are single
+  interactions whose callbacks all close over the same refs, and cutting them
+  up would trade one long file for two coupled ones.
 - Every change keeps `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm e2e` green; CI runs all four plus the bundle budgets.
 
 ## Commands
 
 ```
 pnpm dev          # next dev
-pnpm sim          # dev ws sim server (after Phase 1)
+pnpm sim          # dev ws sim server
 pnpm build        # must stay green — runs isolated from dev's .next (scripts/build-isolated.mjs), safe with dev up
 pnpm lint         # zero warnings
 pnpm test         # vitest

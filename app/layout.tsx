@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, JetBrains_Mono } from "next/font/google";
 import { ConsoleFooter } from "@/components/console";
-import { SimReset, TelemetryProvider } from "@/components/fleet";
+import { SimReset, StorylineJump, TelemetryProvider } from "@/components/fleet";
 import "./globals.css";
 
 /** Operator space. Sentence case, wide-tracked uppercase labels. */
@@ -64,7 +64,12 @@ export default function RootLayout({
         <TelemetryProvider />
         {children}
         <ConsoleFooter>
-          <SimReset />
+          {/* The demo's controls, in the order someone uses them: pick a
+              story, or start this one over. */}
+          <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
+            <StorylineJump />
+            <SimReset />
+          </div>
         </ConsoleFooter>
       </body>
     </html>

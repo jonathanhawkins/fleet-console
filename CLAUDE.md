@@ -60,19 +60,23 @@ Next 15 (App Router, static-export capable) · React 19 · TS 5 strict · Tailwi
 
 ## If this repo moves
 
-The demo URL and the repo slug are baked into a handful of places. `SITE_URL`
-(`lib/constants.ts`) is the only one code reads — `metadataBase` derives the
-preview card's absolute URLs from it, and a stale value there fails silently by
-serving a card that 404s. The rest are prose and have to be edited by hand:
+Edit `SITE_URL` in `lib/constants.ts` and run `node scripts/check-receipts.mjs`.
+It will name every other copy that still points at the old host — it does not
+know the right URL, only that they all have to agree, which is exactly what
+breaks on a move. The copies it walks:
 
 - `README.md` — the CI badge (repo slug, twice in one line), the live-demo link,
   and the `/system` link.
 - `docs/walkthrough.md` — the live-demo link in the opening paragraph.
 - `.github/workflows/ci.yml` — the deploy job's two summary lines, and the
-  `--project-name` passed to `wrangler pages deploy`.
+  `--project-name` passed to `wrangler pages deploy`, which has to match the
+  hostname because Pages serves `<project>.pages.dev`.
 
-`node scripts/check-receipts.mjs` will not catch these; they are URLs, not
-numbers.
+`SITE_URL` is the source of truth because it is the only one code reads:
+`metadataBase` derives the preview card's absolute URLs from it, so a stale
+value there fails silently, serving a card that 404s. The badge is checked
+against the actual git remote (`GITHUB_REPOSITORY` on a runner), so a badge
+left naming the old repo — green forever, describing nothing — fails too.
 
 ## Commands
 

@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { join, resolve } from "node:path";
 import { readdirSync } from "node:fs";
+import { execSync } from "node:child_process";
 
 /**
  * The README's numbers, checked against the thing they describe.
@@ -117,6 +118,107 @@ if (existsSync(chunkDir)) {
   }
 } else {
   notes.push(`chunks: skipped (no ${chunkDir}; run \`pnpm build:static\` first)`);
+}
+
+// -- the URLs ----------------------------------------------------------------
+/**
+ * Every copy of the deployed URL, checked against the one copy code reads.
+ *
+ * `SITE_URL` is not just a link: `metadataBase` derives the preview card's
+ * absolute image URLs from it, so a stale value serves a card that 404s — a
+ * failure whose only symptom is that the link looks dead when someone shares
+ * it. The other copies live in prose and in CI config and cannot import a
+ * constant, so they drift independently.
+ *
+ * This check does not know the right URL. It knows they have to agree, which
+ * is the thing that breaks when the project is renamed or the repo moves: one
+ * place gets edited and the rest go on naming a host that no longer answers.
+ */
+const urlFailures = failures.length;
+const CONSTANTS = "lib/constants.ts";
+const siteUrl = readFileSync(CONSTANTS, "utf8").match(
+  /export const SITE_URL = "([^"]+)"/,
+)?.[1];
+
+if (siteUrl === undefined) {
+  failures.push(`site URL: ${CONSTANTS} no longer declares SITE_URL`);
+} else {
+  const host = new URL(siteUrl).host;
+  // Cloudflare Pages serves <project>.pages.dev, so the deploy's --project-name
+  // and the hostname are the same fact written twice.
+  const project = host.split(".")[0];
+
+  // Prose and config copies of the host, wherever they appear.
+  for (const file of ["README.md", "docs/walkthrough.md", ".github/workflows/ci.yml"]) {
+    if (!existsSync(file)) continue;
+    const text = readFileSync(file, "utf8");
+    const hosts = new Set(text.match(/[a-z0-9-]+\.pages\.dev/g) ?? []);
+    for (const found of hosts) {
+      if (found !== host) {
+        failures.push(
+          `site URL: ${file} points at ${found}, but ${CONSTANTS} says ${host}`,
+        );
+      }
+    }
+  }
+
+  // The deploy publishes to a project name; a mismatch deploys somewhere real
+  // and serves the demo from somewhere else.
+  const workflow = existsSync(".github/workflows/ci.yml")
+    ? readFileSync(".github/workflows/ci.yml", "utf8")
+    : "";
+  const deployed = workflow.match(/--project-name (\S+)/)?.[1];
+  if (deployed !== undefined && deployed !== project) {
+    failures.push(
+      `site URL: CI deploys --project-name ${deployed}, which does not serve ${host}`,
+    );
+  }
+
+  if (!README.includes(siteUrl)) {
+    failures.push(`site URL: the README never links ${siteUrl}`);
+  }
+
+  if (failures.length === urlFailures) notes.push(`site URL: ${host} everywhere`);
+}
+
+// -- the repo slug -----------------------------------------------------------
+/**
+ * The CI badge names a repository. Moved to a new one, it keeps rendering —
+ * the badge of the old repo, green forever, describing nothing.
+ *
+ * The truth is whatever remote this checkout actually has (`GITHUB_REPOSITORY`
+ * on a runner). With neither, there is nothing to compare against and the
+ * check skips rather than guesses.
+ */
+const slug = (() => {
+  if (process.env.GITHUB_REPOSITORY) return process.env.GITHUB_REPOSITORY;
+  try {
+    const remote = execSync("git remote get-url origin", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return remote.trim().match(/github\.com[:/](.+?)(?:\.git)?$/)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+})();
+
+if (slug === null) {
+  notes.push("repo slug: skipped (no git remote and no GITHUB_REPOSITORY)");
+} else {
+  const named = new Set(
+    [...README.matchAll(/github\.com\/([\w.-]+\/[\w.-]+)\/actions/g)].map((m) => m[1]),
+  );
+  const wrong = [...named].filter((n) => n !== slug);
+  if (wrong.length > 0) {
+    failures.push(
+      `repo slug: the README badge names ${wrong.join(", ")}, this repo is ${slug}`,
+    );
+  } else if (named.size > 0) {
+    notes.push(`repo slug: ${slug}`);
+  } else {
+    failures.push("repo slug: the README no longer carries a CI badge");
+  }
 }
 
 // -- report ------------------------------------------------------------------

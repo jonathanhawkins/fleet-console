@@ -231,14 +231,22 @@ describe("what it costs the operator to say yes", () => {
     await user.click(screen.getByRole("button", { name: /^recalibrate joint$/i }));
 
     const dialog = screen.getByRole("alertdialog");
-    expect(within(dialog).getByText(/confirm recalibration · unit n-07/i)).toBeVisible();
+    // toBeInTheDocument, not toBeVisible: the gate opens inside the verdict
+    // card's fade, whose `initial` is opacity 0, and toBeVisible reads that
+    // through every ancestor. Whether a frame has advanced it by now depends on
+    // how loaded the machine is, which is not what this test is about. That the
+    // operator can see these lines is asserted in a real browser, by the axe and
+    // keyboard passes in e2e/accessibility.spec.ts.
+    expect(
+      within(dialog).getByText(/confirm recalibration · unit n-07/i),
+    ).toBeInTheDocument();
     for (const line of recalImpact("gain")) {
-      expect(within(dialog).getByText(line.text)).toBeVisible();
+      expect(within(dialog).getByText(line.text)).toBeInTheDocument();
     }
     // The line an operator would otherwise drop, and the only colour spent.
     expect(
       within(dialog).getByText(/calibration corrects gain, not wear/i),
-    ).toBeVisible();
+    ).toBeInTheDocument();
     // Nothing has left the building yet.
     expect(sent).toEqual([]);
   });

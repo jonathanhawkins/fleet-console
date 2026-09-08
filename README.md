@@ -155,6 +155,15 @@ Each of these is a decision, not an oversight.
   exception that shows why fleet-scoped commands need their own confirmation
   and their own audit.
 
+## On tooling
+
+Built with Claude Code, and the commit trailers say so rather than leaving it
+to be found. The judgment is mine — the two-space thesis, what to measure,
+what to leave out, and when a fix turned out to cost more than the thing it
+fixed. The numbers on this page are machine-checked for the same reason they
+are here at all: a claim about your own work should be something a reader can
+verify rather than take on trust.
+
 ## Run it
 
 ```bash

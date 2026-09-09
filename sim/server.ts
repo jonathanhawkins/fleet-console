@@ -1,6 +1,11 @@
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, type WebSocket } from "ws";
-import { operatorCommandSchema, type FleetMessage } from "@/lib/schema";
+import {
+  operatorCommandSchema,
+  type FleetMessage,
+  type TelemetryMessage,
+} from "@/lib/schema";
+import { PREROLL_MS } from "./engine";
 import {
   createSimEngine,
   DEFAULT_COHORT_TIMELINE,
@@ -101,8 +106,26 @@ export function startSimServer(options: SimServerOptions = {}): Promise<SimServe
     }
   };
 
+  /**
+   * The last `PREROLL_MS` of telemetry this run has already broadcast.
+   *
+   * The worker host manufactures its history at connect, because a page load
+   * is the start of its run. This process has been going the whole time, so
+   * its history is simply what it already said — kept so a console that joins
+   * ten seconds in is handed the same window as one that joins at minute ten,
+   * and so `pnpm dev` behaves like the artifact that ships rather than like a
+   * console whose trend watch is permanently ten seconds behind.
+   */
+  const history: TelemetryMessage[] = [];
+
   const interval = setInterval(() => {
-    broadcast(engine.advance(Date.now() - startedAt));
+    const out = engine.advance(Date.now() - startedAt);
+    for (const m of out) if (m.t === "telemetry") history.push(m);
+    const cutoff = (history.at(-1)?.ts ?? 0) - PREROLL_MS;
+    let stale = 0;
+    while (stale < history.length && history[stale]!.ts < cutoff) stale += 1;
+    if (stale > 0) history.splice(0, stale);
+    broadcast(out);
   }, tickMs);
 
   wss.on("connection", (socket: WebSocket) => {
@@ -121,6 +144,10 @@ export function startSimServer(options: SimServerOptions = {}): Promise<SimServe
     for (const ev of engine.activeDiagEvents()) socket.send(JSON.stringify(ev));
     for (const ev of engine.activeCommandEvents()) socket.send(JSON.stringify(ev));
     for (const ev of engine.activeFleetCommandEvents()) socket.send(JSON.stringify(ev));
+    // After the greeting, never before: a snapshot seams the console's
+    // telemetry channel, and history sent ahead of one lands on the far side
+    // of that seam. Same contract as the worker host's pre-roll.
+    for (const m of history) socket.send(JSON.stringify(m));
     log(`[sim] client connected (${wss.clients.size} total)`);
 
     socket.on("message", (raw) => {

@@ -1,8 +1,10 @@
 // @vitest-environment node
+import { PREROLL_MS } from "@/sim/engine";
 import { beforeEach, describe, expect, it } from "vitest";
 import { type FleetSnapshotMessage, type TelemetryMessage } from "@/lib/schema";
 import { useFleetStore } from "./fleetStore";
 import {
+  TREND_WINDOW_MS,
   resetTrendWatchForTests,
   selectTrendingUnits,
   slopePerMin,
@@ -246,5 +248,16 @@ describe("selectTrendingUnits — the seam between runs", () => {
     feed("N-07", 20);
     feed("N-07", 12, { knee_L: 20 }, 500_000);
     expect(trending()).toEqual([{ unitId: "N-07", joint: "knee_L", cPerMin: 20 }]);
+  });
+});
+
+describe("the history the watch is handed", () => {
+  it("is longer than the window it has to fill", () => {
+    // PREROLL_MS is why the rail can name a suspect six seconds after someone
+    // opens the page instead of ten: the run arrives with a past. If it ever
+    // drops below the fit window the watch is back to refusing to answer until
+    // it has accumulated one live, and nobody waits that long.
+    expect(PREROLL_MS).toBeGreaterThan(TREND_WINDOW_MS);
+    expect(PREROLL_MS - TREND_WINDOW_MS).toBeGreaterThanOrEqual(1_000);
   });
 });

@@ -1,6 +1,7 @@
 import { type FleetMessage } from "@/lib/schema";
 import { type Joint } from "./constants";
 import { clamp01 } from "./rng";
+import { PREROLL_LEAD_MS, PREROLL_MS } from "./preroll";
 import { raiseAlert, requireUnit, type EngineConfig, type EngineState } from "./state";
 
 /**
@@ -24,11 +25,25 @@ export interface IncidentTimeline {
   redAtMs: number;
 }
 
-/** Real demo pacing: ~15 s calm, visible climb, amber at 28 s, red at 38 s. */
+/**
+ * Demo pacing, stated against the moment the console starts watching.
+ *
+ * A run begins at `PREROLL_MS` — the fleet has already been going for that
+ * long and the console is handed the history — so subtracting it gives what
+ * someone who just opened the link actually sees: 2 s of calm, the trend
+ * watch naming the suspect around 6 s, amber at 15 s, red at 25 s.
+ *
+ * The intervals are what they always were (13 s onset→amber, 10 s
+ * amber→red) and that is deliberate: the ramp rate is `12 °C` divided by the
+ * first of them, so holding it fixed keeps the climb, the fitted °C/min the
+ * rail reports, and every number written about them unchanged. Only the
+ * moment the story starts has moved, because the first person to open this
+ * cold gave it less time than the old onset alone.
+ */
 export const DEFAULT_TIMELINE: IncidentTimeline = {
-  onsetMs: 15_000,
-  amberAtMs: 28_000,
-  redAtMs: 38_000,
+  onsetMs: PREROLL_MS + PREROLL_LEAD_MS,
+  amberAtMs: PREROLL_MS + 15_000,
+  redAtMs: PREROLL_MS + 25_000,
 };
 
 /** Failing-channel gain ramp: live trace amplitude vs reference across the scan window. */

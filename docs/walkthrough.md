@@ -20,16 +20,16 @@ same board both times.
 The fleet is calm: eight units, a steady KPI band, and a `LIVE` chip in the
 header that is the transport reporting its own state. At **0:15** the sim
 starts heating N-07's left knee actuator and putting ripple in its torque.
-Nothing alerts yet. At about **0:20** `TRENDING` ticks to 1 and N-07's rail row
-names its suspect — _Trending · left knee +18 °C/min_ — while the unit still
+Nothing alerts yet. At about **0:08** `TRENDING` ticks to 1 and N-07's rail row
+names its suspect — _Trending · left knee +17 °C/min_ — while the unit still
 reads nominal. That is the trend watch: a least-squares fit over the last
 fifteen seconds of joint temperature, flagging the climb before the robot
 complains.
 
-At **0:28** `N-07 · Elm House` flips to `ATTENTION`. The map marker changes with
+At **0:16** `N-07 · Elm House` flips to `ATTENTION`. The map marker changes with
 it and the alert feed gains a line: _left knee actuator trending hot, projected
 to overheat within 6 hours_. The amber is a forecast read off the trend, not a
-threshold trip. At **0:38** the unit goes red; the sim compresses the six-hour
+threshold trip. At **0:26** the unit goes red; the sim compresses the six-hour
 curve into ten seconds so the forecast pays off on camera.
 
 **Click N-07.** Eighteen live canvas instruments, three per joint. The left

@@ -87,6 +87,11 @@ const makeTransport = (
 ) =>
   new WorkerTransport({
     seed: 42,
+    // These assert the stream a directly driven engine produces. The pre-roll
+    // is history delivered after the greeting, tested where it lives
+    // (sim/worker-host.test.ts); here it would just be 160 extra batches
+    // between the snapshot and the first assertion.
+    prerollMs: 0,
     workerFactory: () => new FakeWorker(),
     ...overrides,
   });

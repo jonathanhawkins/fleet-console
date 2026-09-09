@@ -90,6 +90,10 @@ export function createTransport(): TelemetryTransport {
         // clock never stopped, so a reloaded page there rejoins a run already
         // in progress — there is nothing to wind forward.
         resumeAtMs: readStorylineResumeMs(),
+        // The e2e builds compress the storyline into seconds and pin this to
+        // 0: a pre-roll measured against the real timeline would play their
+        // whole incident before the console was greeted.
+        prerollMs: envInt(process.env.NEXT_PUBLIC_SIM_PREROLL_MS),
       });
     }
     default:

@@ -1,5 +1,7 @@
 import * as z from "zod/mini";
 import { operatorCommandSchema, type FleetMessage } from "@/lib/schema";
+import { collectPreroll, prerollFor, PREROLL_MS } from "./engine/preroll";
+import { DEFAULT_TIMELINE } from "./engine/incident-knee";
 import {
   createSimEngine,
   DEFAULT_DIAG_TIMELINE,
@@ -94,6 +96,13 @@ export const simWorkerInitSchema = z.object({
    * t=0, and no second round trip to correct it.
    */
   resumeAtMs: z.optional(nonNegativeMs),
+  /**
+   * How much history to hand the console, overriding `PREROLL_MS`. The e2e
+   * builds pass 0: they compress the storyline into seconds, where a
+   * pre-roll measured against the real one would play the whole incident
+   * before the greeting.
+   */
+  prerollMs: z.optional(nonNegativeMs),
 });
 export type SimWorkerInit = z.infer<typeof simWorkerInitSchema>;
 
@@ -140,6 +149,8 @@ export function startSimWorkerHost(
 
   let engine: SimEngine | null = null;
   let startedAt = 0;
+  /** This run's pre-roll, so a restart can hand over history the same way. */
+  let runPrerollMs = 0;
   let interval: ReturnType<typeof setInterval> | null = null;
 
   const post = (messages: FleetMessage[]): void => {
@@ -165,10 +176,17 @@ export function startSimWorkerHost(
       // `pnpm sim`. RESET_SIM (a cmd) is the in-run replay; this replaces
       // the engine wholesale.
       stopTicking();
-      // A resume moves the run's origin back, so `now() - startedAt` picks up
-      // where the last page left off instead of at zero.
+      // A run does not begin at zero. It begins with a past: `PREROLL_MS` of
+      // storyline the fleet has already lived, or wherever the last page left
+      // off, whichever is further along.
       const resumeAtMs = msg.resumeAtMs ?? 0;
-      startedAt = now() - resumeAtMs;
+      const prerollMs = prerollFor(
+        msg.prerollMs ?? PREROLL_MS,
+        msg.timeline?.onsetMs ?? DEFAULT_TIMELINE.onsetMs,
+      );
+      runPrerollMs = prerollMs;
+      const startAtMs = Math.max(prerollMs, resumeAtMs);
+      startedAt = now() - startAtMs;
       engine = createSimEngine({
         seed: msg.seed,
         unitCount: msg.units,
@@ -186,7 +204,20 @@ export function startSimWorkerHost(
       // stale telemetry across a long gap but still fires every beat inside
       // it, so the engine ends up holding the alerts and statuses the run had
       // at that instant — which is exactly what the greeting below reads.
-      if (resumeAtMs > 0) engine.advance(resumeAtMs);
+      //
+      // The last stretch is walked rather than jumped, because that skipping
+      // is the point: a jump lands the engine in the right *state* with none
+      // of the samples that got it there, and the samples are what the trend
+      // watch fits. So the bulk is a jump and the window is a walk.
+      const created = engine;
+      const historyFrom = Math.max(0, startAtMs - prerollMs);
+      if (historyFrom > 0) created.advance(historyFrom);
+      const history = collectPreroll(
+        (t) => created.advance(t),
+        historyFrom,
+        startAtMs,
+        tickMs,
+      );
 
       // Greet exactly like the ws server greets a connection: snapshot, then
       // this run's alerts, then any in-flight scan's emitted prefix, then any
@@ -199,6 +230,11 @@ export function startSimWorkerHost(
       for (const cmdEv of engine.activeCommandEvents()) port.postMessage(cmdEv);
       for (const fleetEv of engine.activeFleetCommandEvents()) port.postMessage(fleetEv);
 
+      // After the greeting, never before: the snapshot seams the console's
+      // telemetry channel, and history delivered ahead of it would land on the
+      // wrong side of that seam and be ignored. See collectPreroll.
+      for (const m of history) port.postMessage(m);
+
       // Self-scheduled ticks inside the worker: the engine stays pure — the
       // host owns the clock, same inversion as the ws server.
       const running = engine;
@@ -210,6 +246,38 @@ export function startSimWorkerHost(
 
     if (engine === null) {
       if (isDev) console.warn("[sim-worker] dropped command before init");
+      return;
+    }
+    if (msg.cmd.c === "RESET_SIM" && runPrerollMs > 0) {
+      /**
+       * A reset is the "let me watch that again" gesture, and it restarts the
+       * storyline at zero — which restates the world, seams the console's
+       * telemetry channel, and leaves the trend watch with nothing to fit.
+       * Before the incident was pulled forward that cost nothing, because the
+       * onset was further out than the window; now the fault would arrive
+       * before the console could form an opinion about it, and a replay would
+       * quietly be a worse demo than the first run.
+       *
+       * So a reset begins the way a connection does: the snapshot the engine
+       * just produced, then the history under it.
+       */
+      const restarted = engine;
+      // `advance` counts total elapsed ms, not storyline ms, and refuses to go
+      // backwards — a reset moves the storyline's origin up to here rather
+      // than rewinding the engine. So the replay's history is the stretch of
+      // total time *after* the reset, which is storyline 0 -> the pre-roll.
+      const resetAtTotalMs = now() - startedAt;
+      post(restarted.handle(msg.cmd));
+      const history = collectPreroll(
+        (t) => restarted.advance(t),
+        resetAtTotalMs,
+        resetAtTotalMs + runPrerollMs,
+        tickMs,
+      );
+      // The run is now that much further along, so the clock the ticks read
+      // from moves back by the same amount.
+      startedAt -= runPrerollMs;
+      post(history);
       return;
     }
     post(engine.handle(msg.cmd));

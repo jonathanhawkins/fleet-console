@@ -14,6 +14,8 @@ import {
   INCIDENT_JOINT,
   INCIDENT_UNIT_ID,
   JOINTS,
+  PREROLL_MS,
+  prerollFor,
 } from "./engine";
 
 /** Compressed storyline so every test runs in milliseconds of sim time. */
@@ -37,11 +39,32 @@ function kneeTemps(
 }
 
 describe("sim engine — fleet shape", () => {
-  it("has the demo pacing on the default timeline: ~15 s calm, then amber, then red", () => {
-    expect(DEFAULT_TIMELINE.onsetMs).toBe(15_000);
+  it("paces the incident against the moment the console starts watching, not zero", () => {
+    // A run begins at PREROLL_MS with the history already handed over, so what
+    // someone who just opened the page sees is the beat minus that.
+    expect(DEFAULT_TIMELINE.onsetMs - PREROLL_MS).toBe(2_000);
+    expect(DEFAULT_TIMELINE.amberAtMs - PREROLL_MS).toBe(15_000);
+    expect(DEFAULT_TIMELINE.redAtMs - PREROLL_MS).toBe(25_000);
     expect(DEFAULT_TIMELINE.onsetMs).toBeLessThan(DEFAULT_TIMELINE.amberAtMs);
     expect(DEFAULT_TIMELINE.amberAtMs).toBeLessThan(DEFAULT_TIMELINE.redAtMs);
     expect(BATCH_INTERVAL_MS).toBe(100); // 10 Hz batches
+  });
+
+  it("holds the ramp rate that every number written about the climb depends on", () => {
+    // Temperature rises a fixed 12 C across onset->amber, so that interval IS
+    // the ramp rate: 12 C over 13 s is ~55 C/min, which is what makes the
+    // trend watch's fit read ~18 C/min five seconds in. Move the beats all you
+    // like; changing the gap between them silently rewrites the physics and
+    // every figure quoted about it.
+    expect(DEFAULT_TIMELINE.amberAtMs - DEFAULT_TIMELINE.onsetMs).toBe(13_000);
+    expect(DEFAULT_TIMELINE.redAtMs - DEFAULT_TIMELINE.amberAtMs).toBe(10_000);
+  });
+
+  it("leaves room for the history it promises: the pre-roll never reaches the onset", () => {
+    expect(prerollFor(PREROLL_MS, DEFAULT_TIMELINE.onsetMs)).toBe(PREROLL_MS);
+    // A compressed storyline gets whatever calm it actually has, or none.
+    expect(prerollFor(PREROLL_MS, 6_000)).toBe(4_000);
+    expect(prerollFor(PREROLL_MS, 0)).toBe(0);
   });
 
   it("snapshots eight named nominal units before anything happens", () => {

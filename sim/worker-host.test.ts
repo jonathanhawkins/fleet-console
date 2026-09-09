@@ -6,10 +6,11 @@ import {
   type CommandEventMessage,
   type DiagEventMessage,
   type FleetMessage,
+  type FleetSnapshotMessage,
   type OperatorCommand,
   type TelemetryMessage,
 } from "@/lib/schema";
-import { createSimEngine, FLEET_UNITS, JOINTS } from "./engine";
+import { createSimEngine, FLEET_UNITS, JOINTS, PREROLL_MS } from "./engine";
 import { startSimWorkerHost, type SimWorkerPort } from "./worker-host";
 
 /**
@@ -36,6 +37,16 @@ class FakePort implements SimWorkerPort {
     for (const l of this.listeners) l({ data });
   }
 }
+
+/**
+ * `prerollMs: 0` throughout, except where the pre-roll is the subject.
+ *
+ * A real console is handed PREROLL_MS of history after the greeting so its
+ * trend watch has a window to fit. These tests are about the greeting, the
+ * cadence and the init knobs, and 160 replayed batches would bury each of
+ * them. The compressed timelines below clamp to zero on their own; the ones
+ * that park a beat minutes out have to say so.
+ */
 
 /** Compressed storyline: onset immediately, amber at 200 ms, red at 400 ms. */
 const FAST_TIMELINE = { onsetMs: 0, amberAtMs: 200, redAtMs: 400 };
@@ -75,7 +86,7 @@ describe("worker host — init and telemetry cadence", () => {
     expect(port.out).toHaveLength(0); // no engine, no ticks, no output
 
     vi.setSystemTime(0); // re-pin the epoch so emitted ts read as storyline ms
-    port.emit({ type: "init", seed: 42 });
+    port.emit({ type: "init", seed: 42, prerollMs: 0 });
     expect(port.out).toHaveLength(1); // the greeting, synchronously
     const snap = fleetMessageSchema.parse(port.out[0]);
     if (snap.t !== "fleet_snapshot") throw new Error("greeting must be a snapshot");
@@ -119,7 +130,7 @@ describe("worker host — init and telemetry cadence", () => {
   it("stop() halts the tick loop", () => {
     const port = new FakePort();
     const host = startSimWorkerHost(port);
-    port.emit({ type: "init", seed: 42 });
+    port.emit({ type: "init", seed: 42, prerollMs: 0 });
     vi.advanceTimersByTime(300);
     const emitted = port.out.length;
     host.stop();
@@ -136,6 +147,7 @@ describe("worker host — init and telemetry cadence", () => {
       seed: 42,
       timeline: { onsetMs: 60_000, amberAtMs: 70_000, redAtMs: 80_000 },
       nav: { blockAtMs: 300, clearAtMs: 600 },
+      prerollMs: 0,
     });
     vi.advanceTimersByTime(1_000);
 
@@ -319,7 +331,7 @@ describe("worker host — parity with the ws server (units knob + SAFE SIT)", ()
   it("honors the units init knob — the NEXT_PUBLIC_SIM_UNITS twin of SIM_UNITS", () => {
     const port = new FakePort();
     startSimWorkerHost(port);
-    port.emit({ type: "init", seed: 42, units: 500 });
+    port.emit({ type: "init", seed: 42, units: 500, prerollMs: 0 });
 
     const snap = fleetMessageSchema.parse(port.out[0]);
     if (snap.t !== "fleet_snapshot") throw new Error("greeting must be a snapshot");
@@ -393,6 +405,7 @@ describe("worker host — parity with the ws server (firmware cohort)", () => {
       type: "init",
       seed: 42,
       timeline: { onsetMs: 60_000, amberAtMs: 70_000, redAtMs: 80_000 }, // N-07 parked
+      prerollMs: 0,
       cohort: {
         onsetMs: 200,
         staggerMs: 100,
@@ -462,7 +475,7 @@ describe("worker host — boundary hygiene", () => {
     expect(port.out).toHaveLength(0);
     expect(warn).toHaveBeenCalledTimes(4);
 
-    port.emit({ type: "init", seed: 42 });
+    port.emit({ type: "init", seed: 42, prerollMs: 0 });
     vi.advanceTimersByTime(100);
     expect(port.out.length).toBe(1 + FLEET_UNITS.length);
   });
@@ -482,5 +495,96 @@ describe("worker host — boundary hygiene", () => {
 
     vi.advanceTimersByTime(100); // exactly one tick's worth on the new clock
     expect(port.out.length).toBe(mark + 1 + FLEET_UNITS.length);
+  });
+});
+
+describe("worker host — the run arrives with a past", () => {
+  /** Everything the host said before its first tick. */
+  const greeting = (port: FakePort): FleetMessage[] => port.out as FleetMessage[];
+
+  it("greets first and hands over the history afterwards, never the other way round", () => {
+    const port = new FakePort();
+    startSimWorkerHost(port);
+    port.emit({ type: "init", seed: 42 });
+
+    const out = greeting(port);
+    // The snapshot leads, exactly as the ws server's greeting leads. A console
+    // seams its telemetry channel on a snapshot, so history sent ahead of one
+    // lands on the far side of that seam and is discarded — correctly, which
+    // is precisely why it must not be sent there.
+    expect(out[0]?.t).toBe("fleet_snapshot");
+
+    const afterGreeting = out.slice(1);
+    expect(afterGreeting.length).toBeGreaterThan(0);
+    // A fresh, calm pre-roll carries telemetry and nothing else: no alert has
+    // fired yet, and replaying statuses here would double the greeting's.
+    expect(afterGreeting.every((m) => m.t === "telemetry")).toBe(true);
+  });
+
+  it("hands over a window the trend watch can actually fit", () => {
+    const port = new FakePort();
+    startSimWorkerHost(port);
+    port.emit({ type: "init", seed: 42 });
+
+    const n07 = telemetryFor(port.out, "N-07");
+    const span = (n07.at(-1)?.ts ?? 0) - (n07[0]?.ts ?? 0);
+    // The point of the whole exercise: a console that has just connected can
+    // already fit TREND_WINDOW_MS without waiting for it to accumulate live.
+    expect(span).toBeGreaterThanOrEqual(PREROLL_MS - 200);
+    expect(n07.length).toBeGreaterThanOrEqual(PREROLL_MS / 100 - 1);
+  });
+
+  it("ends the history before the first beat, so the greeting is of a calm fleet", () => {
+    const port = new FakePort();
+    startSimWorkerHost(port);
+    port.emit({ type: "init", seed: 42 });
+
+    expect(alertsOf(port.out)).toHaveLength(0);
+    const snap = port.out[0] as FleetSnapshotMessage;
+    expect(snap.units.every((u) => u.status === "nominal")).toBe(true);
+  });
+
+  it("skips the pre-roll on a storyline too compressed to have one", () => {
+    const port = new FakePort();
+    startSimWorkerHost(port);
+    // The e2e shape: the incident starts before any history could exist.
+    port.emit({ type: "init", seed: 42, timeline: FAST_TIMELINE });
+    expect(port.out).toHaveLength(1);
+  });
+
+  it("hands the history over again on a reset, so a replay is not a worse demo", () => {
+    const port = new FakePort();
+    startSimWorkerHost(port);
+    port.emit({ type: "init", seed: 42 });
+    const afterInit = port.out.length;
+
+    cmd(port, { c: "RESET_SIM" });
+    const replay = (port.out as FleetMessage[]).slice(afterInit);
+
+    // Same contract as the greeting: the snapshot restates the world, and the
+    // history arrives under it rather than ahead of it.
+    expect(replay[0]?.t).toBe("fleet_snapshot");
+    expect(replay.slice(1).every((m) => m.t === "telemetry")).toBe(true);
+
+    const n07 = replay.filter(
+      (m): m is TelemetryMessage => m.t === "telemetry" && m.unitId === "N-07",
+    );
+    const span = (n07.at(-1)?.ts ?? 0) - (n07[0]?.ts ?? 0);
+    expect(span).toBeGreaterThanOrEqual(PREROLL_MS - 200);
+  });
+
+  it("resumes into history rather than into silence", () => {
+    const port = new FakePort();
+    startSimWorkerHost(port);
+    // Far enough in that the knee incident is long past.
+    port.emit({ type: "init", seed: 42, resumeAtMs: 90_000 });
+
+    const n07 = telemetryFor(port.out, "N-07");
+    const last = n07.at(-1)?.ts ?? 0;
+    const span = last - (n07[0]?.ts ?? 0);
+    // The window ends where the console is resuming to, not back at zero: a
+    // reload lands with the same evidence a tab that never closed would have.
+    expect(span).toBeGreaterThanOrEqual(PREROLL_MS - 200);
+    expect(alertsOf(port.out).length).toBeGreaterThan(0);
   });
 });

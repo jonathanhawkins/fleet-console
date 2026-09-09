@@ -4,3 +4,4 @@
  * every host and test (`@/sim/engine`, `./engine`).
  */
 export * from "./engine/index";
+export * from "./engine/preroll";

@@ -37,6 +37,8 @@ export interface WorkerTransportOptions {
   diagScale?: number;
   /** Storyline ms to resume at — a reload picking the run back up. */
   resumeAtMs?: number;
+  /** History handed over after the greeting; see PREROLL_MS. 0 disables it. */
+  prerollMs?: number;
   /** Injectable worker constructor for tests; defaults to the bundled sim worker. */
   workerFactory?: () => WorkerLike;
   /**
@@ -105,6 +107,7 @@ export class WorkerTransport implements TelemetryTransport, ConnectionStatusSour
       cohort: options.cohort,
       diagScale: options.diagScale,
       resumeAtMs: options.resumeAtMs,
+      prerollMs: options.prerollMs,
     };
     this.openTimeoutMs = options.openTimeoutMs ?? DEFAULT_OPEN_TIMEOUT_MS;
     this.factory =

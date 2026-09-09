@@ -18,10 +18,13 @@ _[Watch it as video (54 s, MP4)](docs/evidence/golden-path.mp4)_
 
 Open the demo and leave it running. Timings are from page load.
 
-**0:20** — N-07's row in the rail names its suspect (_left knee +18 °C/min_)
+**0:08** — N-07's row in the rail names its suspect (_left knee +17 °C/min_)
 while the unit still reads nominal. That is a least-squares fit over fifteen
-seconds of joint temperature, not a threshold. **0:28** it goes `ATTENTION`;
-the map marker and the alert feed react in the same frame batch. **0:38** red.
+seconds of joint temperature, not a threshold — and it can answer that fast
+because the run arrives with a past: the console is handed the fleet's last
+sixteen seconds the moment it connects, so the window is already full.
+**0:16** N-07 goes `ATTENTION`; the map marker and the alert feed react in the
+same frame batch. **0:26** red.
 
 **Click N-07, then Run diagnostic.** Eighteen canvas instruments, and the left
 knee's three traces are the only warm thing on the page. The descent drains it,
@@ -121,7 +124,7 @@ prose and the artifact disagree.
 
 ## Testing
 
-`pnpm test` runs 1,528 specs across 99 files: console components, both stores'
+`pnpm test` runs 1,537 specs across 99 files: console components, both stores'
 reducers and guard rails, the transports against injected sockets and workers,
 the ordering gate under scripted disorder, and the sim engine's determinism.
 `pnpm e2e` builds the static export and runs five Playwright projects against

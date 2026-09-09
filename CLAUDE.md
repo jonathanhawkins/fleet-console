@@ -60,17 +60,24 @@ Next 15 (App Router, static-export capable) · React 19 · TS 5 strict · Tailwi
 
 ## If this repo moves
 
-Edit `SITE_URL` in `lib/constants.ts` and run `node scripts/check-receipts.mjs`.
-It will name every other copy that still points at the old host — it does not
-know the right URL, only that they all have to agree, which is exactly what
-breaks on a move. The copies it walks:
+**The hostname is Cloudflare's to assign, not this repo's to declare.** Read it
+with `pnpm dlx wrangler@4 pages project list` — that is the only authority. It
+is usually `<project>.pages.dev`, but a name already taken gets a suffix
+instead (this account's `azul` project answers on `azul-9sy.pages.dev`), so
+never assume the project name and the hostname are the same word.
+
+Then set `SITE_URL` in `lib/constants.ts` to whatever that command reported and
+run `node scripts/check-receipts.mjs`. It will name every other copy still
+pointing at the old host. It cannot tell you the right URL — only that every
+copy here agrees with `SITE_URL` — which is exactly what breaks on a move. The
+copies it walks:
 
 - `README.md` — the CI badge (repo slug, twice in one line), the live-demo link,
   and the `/system` link.
 - `docs/walkthrough.md` — the live-demo link in the opening paragraph.
 - `.github/workflows/ci.yml` — the deploy job's two summary lines, and the
-  `--project-name` passed to `wrangler pages deploy`, which has to match the
-  hostname because Pages serves `<project>.pages.dev`.
+  `--project-name` passed to `wrangler pages deploy`, which must be the
+  hostname's first label or the stem it was suffixed from.
 
 `SITE_URL` is the source of truth because it is the only one code reads:
 `metadataBase` derives the preview card's absolute URLs from it, so a stale

@@ -130,9 +130,13 @@ if (existsSync(chunkDir)) {
  * it. The other copies live in prose and in CI config and cannot import a
  * constant, so they drift independently.
  *
- * This check does not know the right URL. It knows they have to agree, which
- * is the thing that breaks when the project is renamed or the repo moves: one
- * place gets edited and the rest go on naming a host that no longer answers.
+ * The authority is not this repo. Cloudflare assigns the hostname when the
+ * Pages project is created, and `wrangler pages project list` is the only
+ * place it can be read — so this checks that every copy here agrees with
+ * `SITE_URL`, and leaves whether `SITE_URL` matches the real project to the
+ * one command that can answer it. What it catches is the thing that actually
+ * breaks on a rename or a move: one place gets edited and the rest go on
+ * naming a host that no longer answers.
  */
 const urlFailures = failures.length;
 const CONSTANTS = "lib/constants.ts";
@@ -144,9 +148,7 @@ if (siteUrl === undefined) {
   failures.push(`site URL: ${CONSTANTS} no longer declares SITE_URL`);
 } else {
   const host = new URL(siteUrl).host;
-  // Cloudflare Pages serves <project>.pages.dev, so the deploy's --project-name
-  // and the hostname are the same fact written twice.
-  const project = host.split(".")[0];
+  const label = host.split(".")[0];
 
   // Prose and config copies of the host, wherever they appear.
   for (const file of ["README.md", "docs/walkthrough.md", ".github/workflows/ci.yml"]) {
@@ -167,8 +169,13 @@ if (siteUrl === undefined) {
   const workflow = existsSync(".github/workflows/ci.yml")
     ? readFileSync(".github/workflows/ci.yml", "utf8")
     : "";
+  // Pages serves <project>.pages.dev — except when that name was already
+  // taken, where Cloudflare appends a suffix and the project answers on
+  // <project>-<suffix>.pages.dev instead. Requiring an exact match would fail
+  // a correct deploy, so the label has to be the project name or the project
+  // name plus a suffix. Naming a different project still fails.
   const deployed = workflow.match(/--project-name (\S+)/)?.[1];
-  if (deployed !== undefined && deployed !== project) {
+  if (deployed !== undefined && label !== deployed && !label.startsWith(`${deployed}-`)) {
     failures.push(
       `site URL: CI deploys --project-name ${deployed}, which does not serve ${host}`,
     );

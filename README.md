@@ -124,7 +124,7 @@ prose and the artifact disagree.
 
 ## Testing
 
-`pnpm test` runs 1,537 specs across 99 files: console components, both stores'
+`pnpm test` runs 1,541 specs across 99 files: console components, both stores'
 reducers and guard rails, the transports against injected sockets and workers,
 the ordering gate under scripted disorder, and the sim engine's determinism.
 `pnpm e2e` builds the static export and runs five Playwright projects against

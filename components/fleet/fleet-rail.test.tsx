@@ -631,9 +631,9 @@ describe("rail height", () => {
       UNIT_CARD_HEIGHT * MAX_VISIBLE_ROWS,
     );
     // the cap is a fixed figure — a trending row in a big fleet does not nudge it
-    expect(railScrollportHeight(MAX_VISIBLE_ROWS + 1, () => UNIT_CARD_TRENDING_HEIGHT)).toBe(
-      UNIT_CARD_HEIGHT * MAX_VISIBLE_ROWS,
-    );
+    expect(
+      railScrollportHeight(MAX_VISIBLE_ROWS + 1, () => UNIT_CARD_TRENDING_HEIGHT),
+    ).toBe(UNIT_CARD_HEIGHT * MAX_VISIBLE_ROWS);
     // …and exactly MAX_VISIBLE_ROWS is still "fits", measured from its rows
     expect(railScrollportHeight(MAX_VISIBLE_ROWS, () => UNIT_CARD_HEIGHT)).toBe(
       UNIT_CARD_HEIGHT * MAX_VISIBLE_ROWS,

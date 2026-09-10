@@ -11,10 +11,11 @@ import { expect, test, type Page } from "@playwright/test";
  * accessibility problem this app has. A 100 that never opened a dialog is a
  * number about the easy part.
  *
- * So: axe on each interactive surface as the golden path reaches it, and one
- * walk of that path driven by nothing but the keyboard. Both run against the
- * deploy artifact, in machine space as well as operator space — contrast in
- * phosphor-on-black is a claim the repo makes in its first paragraph.
+ * So: axe on each interactive surface as the golden path reaches it — in two
+ * walks, one for each space — and one walk of that path driven by nothing but
+ * the keyboard. All of it runs against the deploy artifact, in machine space
+ * as well as operator space — contrast in phosphor-on-black is a claim the
+ * repo makes in its first paragraph.
  */
 
 /**
@@ -89,20 +90,46 @@ const attentionRow = (page: Page) =>
     .getByRole("link", { name: /N-07, Elm House\. (Attention|Alert)\./ })
     .and(page.locator('[data-slot="unit-card"]'));
 
-test("no axe violations on any surface the golden path opens", async ({ page }) => {
+/**
+ * The golden path, in the two steps the axe walks below share.
+ *
+ * One walk used to open every surface in sequence, which put twelve fixed
+ * seconds of storyline — the amber lands at nine, the scan wants three more —
+ * in front of eight full-page scans, and left the whole test four seconds
+ * inside its budget on a good runner and outside it on a slow one. Two walks
+ * pay for the storyline twice and buy each space a budget of its own; a scan
+ * that times out is a gate that has said nothing.
+ */
+async function openFleet(page: Page) {
   await page.goto("/");
   await expect(page.getByText(/8 units/i)).toBeVisible();
   await expect(page.locator('[data-slot="unit-card"]')).toHaveCount(8);
+}
+
+async function openIncident(page: Page) {
+  await expect(attentionRow(page)).toBeVisible({ timeout: 20_000 });
+  await attentionRow(page).click();
+  await expect(page.getByRole("heading", { name: "N-07" })).toBeVisible();
+  await expect(page.locator('[data-slot="incident-banner"]')).toBeVisible();
+}
+
+test("no axe violations on the operator surfaces the golden path opens", async ({
+  page,
+}) => {
+  await openFleet(page);
   await expectNoViolations(page, "fleet page, quiet");
 
   // The fleet with an alert on it: status colour, the alert feed, the banner.
   await expect(attentionRow(page)).toBeVisible({ timeout: 20_000 });
   await expectNoViolations(page, "fleet page, alert raised");
 
-  await attentionRow(page).click();
-  await expect(page.getByRole("heading", { name: "N-07" })).toBeVisible();
-  await expect(page.locator('[data-slot="incident-banner"]')).toBeVisible();
+  await openIncident(page);
   await expectNoViolations(page, "unit page with incident");
+});
+
+test("no axe violations in machine space, and on the way back out", async ({ page }) => {
+  await openFleet(page);
+  await openIncident(page);
 
   // Machine space. Everything below here is phosphor on near-black, which is
   // where a contrast regression would actually land.

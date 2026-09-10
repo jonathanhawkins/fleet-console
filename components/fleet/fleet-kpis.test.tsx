@@ -127,6 +127,68 @@ describe("FleetKpis", () => {
     expect(figure("Units alerting")).toHaveClass("text-alert-ink");
   });
 
+  /**
+   * The band's two watched numbers move rarely and mean something when they
+   * do, so each carries the change beat; the other two move as bookkeeping and
+   * must not, or the row would acknowledge the passage of time. The arrival is
+   * excluded on purpose — the em-dash inking up is already one gesture, and a
+   * second on top of it would stage two arrivals for one piece of news.
+   */
+  it("draws the eye to a count that moved, and not to one that has just arrived", () => {
+    render(
+      <dl>
+        <FleetKpis />
+      </dl>,
+    );
+
+    act(() => {
+      useFleetStore.getState().applySnapshot(snapshot(["nominal", "nominal"]));
+    });
+    expect(figure("Units alerting")).toHaveTextContent("0");
+    expect(figure("Units alerting")).not.toHaveAttribute("data-ack");
+
+    act(() => {
+      useFleetStore.getState().applyAlert({
+        t: "alert",
+        alert: {
+          id: "al-001",
+          unitId: "N-02",
+          severity: "red",
+          message: "House 2: left knee actuator overheating",
+          ts: Date.now(),
+        },
+      });
+    });
+
+    expect(figure("Units alerting")).toHaveAttribute("data-ack");
+    // nominal moved too — as alerting's inverse — and stays silent, so one
+    // piece of news lights one place on the row
+    expect(figure("Units nominal")).not.toHaveClass("stat-group__ack");
+    expect(figure("Avg battery")).not.toHaveClass("stat-group__ack");
+  });
+
+  it("gives the trend count the same beat, in its own quieter ink", () => {
+    useFleetStore.getState().applySnapshot(snapshot(["nominal", "nominal"]));
+    render(
+      <dl>
+        <FleetKpis />
+      </dl>,
+    );
+    expect(figure("Trending")).not.toHaveAttribute("data-ack");
+
+    act(() => {
+      feed("N-01", 20, { knee_L: 20 });
+    });
+
+    const trending = figure("Trending");
+    expect(trending).toHaveTextContent("1");
+    expect(trending).toHaveAttribute("data-ack");
+    // the mark paints in currentColor, so warn ink is what makes it one step
+    // under the alert count's — the ordering lives in the tone, not in a
+    // second set of colours
+    expect(trending).toHaveClass("stat-group__ack", "text-warn-ink");
+  });
+
   it("names the currency it counts: units, not alert events", () => {
     useFleetStore.getState().applySnapshot(snapshot(["nominal", "nominal"]));
     render(

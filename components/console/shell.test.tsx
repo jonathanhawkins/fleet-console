@@ -123,6 +123,56 @@ describe("StatGroup", () => {
     expect(dd).toHaveClass("text-ink");
     expect(dd).not.toHaveClass("text-ink-muted");
   });
+
+  /**
+   * `acknowledge` is a *change* beat, and the first reading is not a change —
+   * it already has the arrival ink above. Staging both would spend two
+   * gestures on one piece of news, so the mark's absence on arrival is as
+   * load-bearing as its presence afterwards, and both are asserted here.
+   */
+  it("marks a figure that moved, and leaves the first reading alone", () => {
+    const { rerender } = render(
+      <dl>
+        <StatGroup label="Units alerting" pending acknowledge />
+      </dl>,
+    );
+
+    const dd = screen.getByText("No data yet").parentElement;
+    expect(dd).toHaveClass("stat-group__ack");
+    expect(dd).not.toHaveAttribute("data-ack");
+
+    rerender(
+      <dl>
+        <StatGroup label="Units alerting" value="0" acknowledge />
+      </dl>,
+    );
+    expect(dd).not.toHaveAttribute("data-ack");
+
+    rerender(
+      <dl>
+        <StatGroup label="Units alerting" value="1" tone="alert" acknowledge />
+      </dl>,
+    );
+    expect(dd).toHaveAttribute("data-ack");
+  });
+
+  it("stays inert when a figure is not asked to acknowledge itself", () => {
+    const { rerender } = render(
+      <dl>
+        <StatGroup label="Avg battery" value="78" unit="%" />
+      </dl>,
+    );
+
+    const dd = screen.getByText("78");
+    expect(dd).not.toHaveClass("stat-group__ack");
+
+    rerender(
+      <dl>
+        <StatGroup label="Avg battery" value="77" unit="%" />
+      </dl>,
+    );
+    expect(dd).not.toHaveAttribute("data-ack");
+  });
 });
 
 describe("ConsoleHeader", () => {

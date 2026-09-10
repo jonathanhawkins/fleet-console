@@ -405,3 +405,115 @@
     }
   }
 }
+
+/* ---------------------------------------------------------------------------
+   A KPI figure that just moved (StatGroup's `acknowledge`). Two pseudo-
+   elements on the figure itself: an edgeless wash of the status colour
+   gathering behind it, and a rule drawn under it, left to right. Both
+   dissolve inside 800 ms.
+
+   The rule takes `currentColor` and the wash takes `--ack-wash`, which only
+   the status tones define (stat-group.tsx) — so the beat inherits the band's
+   ordering rather than restating it, and a count falling back to a plain-ink
+   zero gets the rule and no wash at all. That split is deliberate: an area of
+   colour is read by luminance, and a neutral wash behind a zero would sit
+   heavier on the page than a clay one behind a raised count.
+
+   Neither half fills, and both rest at opacity 0, so under the reduced-motion
+   clamp the whole gesture resolves to nothing and the number simply appears in
+   its new state. `isolation` keeps the wash's negative z-index inside this
+   box, under the digits and over the page.
+--------------------------------------------------------------------------- */
+@layer components {
+  .stat-group__ack {
+    position: relative;
+    isolation: isolate;
+    /* The marks hug the figure, not the wider label above it. */
+    width: fit-content;
+  }
+
+  .stat-group__ack::before,
+  .stat-group__ack::after {
+    content: "";
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* The wash is a gradient rather than a fill because a fill has an edge, and
+     an edge on a figure is a badge. Faded out well inside its own box, it is
+     warmth with no shape — the thing peripheral vision actually answers to,
+     which is a change in area luminance and not a change in hue. */
+  .stat-group__ack::before {
+    inset: -0.625rem -1.25rem;
+    z-index: -1;
+    background-image: radial-gradient(
+      ellipse 60% 62% at 50% 52%,
+      var(--ack-wash, transparent),
+      transparent
+    );
+  }
+
+  /* The rule keeps the figure's own measure: it is an underline, and an
+     underline that outran the number would read as an empty field. */
+  .stat-group__ack::after {
+    right: -0.55rem;
+    bottom: -0.35rem;
+    left: -0.55rem;
+    height: 2px;
+    transform: scaleX(0);
+    transform-origin: left center;
+    background-color: currentColor;
+  }
+
+  .stat-group__ack[data-ack]::before {
+    animation: stat-ack-wash 800ms var(--ease-console) 1;
+  }
+
+  .stat-group__ack[data-ack]::after {
+    animation: stat-ack-rule 800ms var(--ease-console) 1;
+  }
+
+  /* 20% at the hottest point of the gradient, which is the point the digits
+     sit on, and the ceiling: clay ink holds 4.5:1 against its own wash there
+     and would not one step higher, so the peak of the beat is not a moment the
+     figure spends under AA. The strength is spent on area and on the hold
+     instead, which is what peripheral vision answers to — and the decay runs
+     linear where the attack rides the console ease, so the marks are seen
+     leaving rather than simply gone. */
+  @keyframes stat-ack-wash {
+    0% {
+      opacity: 0;
+    }
+    18% {
+      opacity: 0.2;
+    }
+    44% {
+      opacity: 0.2;
+      animation-timing-function: linear;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes stat-ack-rule {
+    0% {
+      opacity: 0;
+      transform: scaleX(0);
+    }
+    18% {
+      opacity: 1;
+      transform: scaleX(1);
+    }
+    60% {
+      opacity: 1;
+      transform: scaleX(1);
+      animation-timing-function: linear;
+    }
+    100% {
+      opacity: 0;
+      transform: scaleX(1);
+    }
+  }
+}

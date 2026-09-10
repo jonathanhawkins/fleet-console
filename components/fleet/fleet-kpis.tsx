@@ -25,6 +25,15 @@ import { ConnectionStatus, StatGroup, type ConnectionState } from "@/components/
  * keeps its array identity while trending truth is unchanged
  * (lib/stores/trendWatch.ts), so the length read from it is as stable as the
  * integers beside it — and as cheap.
+ *
+ * Two of the four acknowledge their own changes, and which two is the point.
+ * "Units alerting" and "Trending" are the questions an operator is watching
+ * the band *for*; they move rarely, and when they move something has happened
+ * in a house. The other two move as bookkeeping: average battery drifts a
+ * point a minute on its own, and nominal is alerting's inverse, so it would
+ * fire a second beat for the same piece of news and split the eye between two
+ * places on the row. A band where every number acknowledged itself would tell
+ * an operator only that time is passing.
  */
 export function FleetKpis() {
   const fleetSize = useFleetStore(selectUnitIds).length;
@@ -61,6 +70,7 @@ export function FleetKpis() {
         pending={pending}
         value={alerts}
         tone={alerts > 0 ? "alert" : "ink"}
+        acknowledge
       />
       <StatGroup label="Avg battery" pending={pending} value={battery} unit="%" />
       {/* The predictive one, and the only KPI in the band that is a *forecast*
@@ -80,6 +90,7 @@ export function FleetKpis() {
         pending={pending}
         value={trending}
         tone={trending > 0 ? "warn" : "soft"}
+        acknowledge
       />
     </>
   );

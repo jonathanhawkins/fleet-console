@@ -234,6 +234,12 @@ export const SPECIMENS: readonly Specimen[] = [
         note: "No data yet: renders an em-dash rather than inventing a zero.",
       },
       {
+        name: "acknowledge",
+        type: "boolean",
+        fallback: "false",
+        note: "One-shot beat when the value moves: a rule in the figure’s own ink, over a wash the status tones alone light. Not on the first reading, which has its own.",
+      },
+      {
         name: "size",
         type: `"md" | "sm"`,
         fallback: `"md"`,
@@ -246,7 +252,7 @@ export const SPECIMENS: readonly Specimen[] = [
         note: "The figure’s colour when the number itself is the alarm.",
       },
     ],
-    a11y: "It renders a `dt`/`dd` pair, so it must sit inside a `dl` — the KPI band on the fleet page is that list. Pending renders an em-dash rather than a zero, because a fleet that has not reported is not a fleet of zero.",
+    a11y: "It renders a `dt`/`dd` pair, so it must sit inside a `dl` — the KPI band on the fleet page is that list. Pending renders an em-dash rather than a zero, because a fleet that has not reported is not a fleet of zero. The `acknowledge` beat is decoration on two pseudo-elements: it carries nothing a screen reader needs, changes no contrast, and reduced motion resolves it to nothing rather than to a frozen mark.",
     render: () => (
       // The `dl` is the point: see the note below.
       <dl className="flex flex-wrap items-baseline gap-x-8 gap-y-3">

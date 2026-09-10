@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
  * Accessibility, where Lighthouse cannot reach.
@@ -11,9 +11,9 @@ import { expect, test, type Page } from "@playwright/test";
  * accessibility problem this app has. A 100 that never opened a dialog is a
  * number about the easy part.
  *
- * So: axe on each interactive surface as the golden path reaches it — in two
- * walks, one for each space — and one walk of that path driven by nothing but
- * the keyboard. All of it runs against the deploy artifact, in machine space
+ * So: axe on each interactive surface as the golden path reaches it — in three
+ * walks: the operator surfaces, machine space, and the way back out — and one
+ * walk of that path driven by nothing but the keyboard. All of it runs against the deploy artifact, in machine space
  * as well as operator space — contrast in phosphor-on-black is a claim the
  * repo makes in its first paragraph.
  */
@@ -91,14 +91,16 @@ const attentionRow = (page: Page) =>
     .and(page.locator('[data-slot="unit-card"]'));
 
 /**
- * The golden path, in the two steps the axe walks below share.
+ * The golden path, in the steps the axe walks below share.
  *
  * One walk used to open every surface in sequence, which put twelve fixed
  * seconds of storyline — the amber lands at nine, the scan wants three more —
  * in front of eight full-page scans, and left the whole test four seconds
- * inside its budget on a good runner and outside it on a slow one. Two walks
- * pay for the storyline twice and buy each space a budget of its own; a scan
- * that times out is a gate that has said nothing.
+ * inside its budget on a good runner and outside it on a slow one. On a
+ * two-core runner each scan costs about two seconds, so a walk carries no
+ * more than three. The walks pay for the storyline each time and buy
+ * themselves a budget of their own; a scan that times out is a gate that has
+ * said nothing.
  */
 async function openFleet(page: Page) {
   await page.goto("/");
@@ -127,12 +129,8 @@ test("no axe violations on the operator surfaces the golden path opens", async (
   await expectNoViolations(page, "unit page with incident");
 });
 
-test("no axe violations in machine space, and on the way back out", async ({ page }) => {
-  await openFleet(page);
-  await openIncident(page);
-
-  // Machine space. Everything below here is phosphor on near-black, which is
-  // where a contrast regression would actually land.
+/** Into the dark diagnostic, as far as its first log line. */
+async function startDescent(page: Page): Promise<Locator> {
   await page
     .locator('[data-slot="incident-banner"]')
     .getByRole("button", { name: "Run diagnostic" })
@@ -143,11 +141,22 @@ test("no axe violations in machine space, and on the way back out", async ({ pag
     "SCAN START",
     { timeout: 10_000 },
   );
+  return overlay;
+}
+
+const verdictHeading = (overlay: Locator) =>
+  overlay.getByRole("heading", { name: "KNEE_L · ACTUATOR A-07" });
+
+test("no axe violations in machine space", async ({ page }) => {
+  await openFleet(page);
+  await openIncident(page);
+
+  // Everything below here is phosphor on near-black, which is where a
+  // contrast regression would actually land.
+  const overlay = await startDescent(page);
   await expectNoViolations(page, "descent, mid-scan");
 
-  await expect(
-    overlay.getByRole("heading", { name: "KNEE_L · ACTUATOR A-07" }),
-  ).toBeVisible({ timeout: 20_000 });
+  await expect(verdictHeading(overlay)).toBeVisible({ timeout: 20_000 });
   await expectNoViolations(page, "verdict");
 
   // The confirm gate: an alertdialog over a dialog, the deepest focus trap here.
@@ -156,6 +165,15 @@ test("no axe violations in machine space, and on the way back out", async ({ pag
   await expectNoViolations(page, "safe-sit confirm gate");
   await page.keyboard.press("Escape");
   await expect(overlay.getByRole("alertdialog")).toBeHidden();
+});
+
+test("no axe violations on the way back out, with the incident on file", async ({
+  page,
+}) => {
+  await openFleet(page);
+  await openIncident(page);
+  const overlay = await startDescent(page);
+  await expect(verdictHeading(overlay)).toBeVisible({ timeout: 20_000 });
 
   // Back in operator space with the incident on file, and the report it opens.
   await overlay.getByRole("button", { name: /return to console/i }).click();

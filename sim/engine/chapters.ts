@@ -3,9 +3,9 @@ import type { EngineConfig } from "./state";
 /**
  * The storyline's four chapters, addressable by name.
  *
- * The fleet runs one clock and four stories on it: N-07's knee at 15 s, N-03's
- * blocked route at 2:00, the firmware cohort at 3:00, N-01's encoder offset at
- * 5:30. Watched end to end that is five and a half minutes, which is longer
+ * The fleet runs one clock and four stories on it: N-07's knee amber at 18 s,
+ * N-03's blocked route at 2:00, the firmware cohort at 3:00, N-01's encoder
+ * offset at 5:30. Watched end to end that is five and a half minutes, which is longer
  * than anyone gives a demo they did not build — so three of the four went
  * unseen by everyone who ever opened it.
  *
@@ -31,7 +31,9 @@ export const CHAPTER_LEAD_MS = 8_000;
 export function chapterBeatMs(cfg: EngineConfig, chapter: StorylineChapter): number {
   switch (chapter) {
     case "knee":
-      return cfg.timeline.onsetMs;
+      // The amber, not the onset: the onset sits inside the history a run is
+      // handed, and the first thing anyone sees is the unit turning.
+      return cfg.timeline.amberAtMs;
     case "nav":
       return cfg.navTimeline.blockAtMs;
     case "cohort":

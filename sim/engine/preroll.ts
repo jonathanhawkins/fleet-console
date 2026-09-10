@@ -23,23 +23,28 @@ import type { FleetMessage } from "@/lib/schema";
 export const PREROLL_MS = 16_000;
 
 /**
- * The calm between the end of the history and the first beat — what someone
- * sees before anything starts to go wrong, and the margin that keeps a
- * pre-roll from playing the incident to a console it has not greeted yet.
+ * How long after the greeting the first alert lands: enough for the page to
+ * paint and for the rail's TRENDING to be read before the amber confirms it,
+ * and short enough that nobody has left. It is also the margin that keeps a
+ * pre-roll from playing that alert to a console it has not greeted yet.
  */
 export const PREROLL_LEAD_MS = 2_000;
 
 /**
- * How much history this run may hand over, given where its first beat is.
+ * How much history this run may hand over, given where its first alert is.
  *
- * A pre-roll is only ever the calm before the story. The e2e builds compress
- * that story into seconds — onset at 6 s, and one lane parks it at zero — so a
- * pre-roll measured against the real timeline would run straight through the
- * incident before the greeting. Clamping here means no caller has to know
- * that, and a timeline nobody anticipated still cannot break the greeting.
+ * The history may carry the climb — it is telemetry, and a climb already in
+ * the window is what lets the watch name its suspect on the first frame —
+ * but never the alert. An alert inside the history is one the greeting has
+ * already stated and nobody watched land, which is the one thing the fleet
+ * page is built to show. The e2e builds compress the story into seconds —
+ * amber at 9 s, and one lane parks the whole incident at zero — so a pre-roll
+ * measured against the real timeline would run straight through it before
+ * the greeting. Clamping here means no caller has to know that, and a
+ * timeline nobody anticipated still cannot break the greeting.
  */
-export function prerollFor(requestedMs: number, onsetMs: number): number {
-  return Math.max(0, Math.min(requestedMs, onsetMs - PREROLL_LEAD_MS));
+export function prerollFor(requestedMs: number, firstAlertMs: number): number {
+  return Math.max(0, Math.min(requestedMs, firstAlertMs - PREROLL_LEAD_MS));
 }
 
 /**

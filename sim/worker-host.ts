@@ -182,7 +182,7 @@ export function startSimWorkerHost(
       const resumeAtMs = msg.resumeAtMs ?? 0;
       const prerollMs = prerollFor(
         msg.prerollMs ?? PREROLL_MS,
-        msg.timeline?.onsetMs ?? DEFAULT_TIMELINE.onsetMs,
+        msg.timeline?.amberAtMs ?? DEFAULT_TIMELINE.amberAtMs,
       );
       runPrerollMs = prerollMs;
       const startAtMs = Math.max(prerollMs, resumeAtMs);

@@ -13,23 +13,24 @@ arrives while you are watching and the fleet still carries everything that
 would already have happened by then. Pressing the same act twice lands on the
 same board both times.
 
-## Act 1 — one robot, escalating (0:15 → 1:15)
+## Act 1 — one robot, escalating (0:02 → 1:00)
 
 ![The fleet page with N-07 in attention: the map marker, the rail row and the alert feed all carrying the same amber.](evidence/stills/fleet-alert.png)
 
 The fleet is calm: eight units, a steady KPI band, and a `LIVE` chip in the
-header that is the transport reporting its own state. At **0:15** the sim
-starts heating N-07's left knee actuator and putting ripple in its torque.
-Nothing alerts yet. At about **0:08** `TRENDING` ticks to 1 and N-07's rail row
-names its suspect — _Trending · left knee +17 °C/min_ — while the unit still
-reads nominal. That is the trend watch: a least-squares fit over the last
-fifteen seconds of joint temperature, flagging the climb before the robot
-complains.
+header that is the transport reporting its own state — except that the rail
+already has something to say. `TRENDING` reads 1 and N-07's row names its
+suspect — _Trending · left knee +44 °C/min_ — while the unit still reads
+nominal. That is the trend watch: a least-squares fit over the last fifteen
+seconds of joint temperature, flagging the climb before the robot complains.
+The climb began eleven seconds before you arrived, in the history the console
+is handed the moment it connects, which is why the watch has an answer on the
+first frame.
 
-At **0:16** `N-07 · Elm House` flips to `ATTENTION`. The map marker changes with
+At **0:02** `N-07 · Elm House` flips to `ATTENTION`. The map marker changes with
 it and the alert feed gains a line: _left knee actuator trending hot, projected
 to overheat within 6 hours_. The amber is a forecast read off the trend, not a
-threshold trip. At **0:26** the unit goes red; the sim compresses the six-hour
+threshold trip. At **0:12** the unit goes red; the sim compresses the six-hour
 curve into ten seconds so the forecast pays off on camera.
 
 **Click N-07.** Eighteen live canvas instruments, three per joint. The left

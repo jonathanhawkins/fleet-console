@@ -30,20 +30,26 @@ export interface IncidentTimeline {
  *
  * A run begins at `PREROLL_MS` — the fleet has already been going for that
  * long and the console is handed the history — so subtracting it gives what
- * someone who just opened the link actually sees: 2 s of calm, the trend
- * watch naming the suspect around 6 s, amber at 15 s, red at 25 s.
+ * someone who just opened the link actually sees: the rail already naming
+ * its suspect, amber at 2 s, red at 12 s. The climb began eleven seconds
+ * before they arrived and is in the history they are handed, which is what
+ * lets the watch answer on the first frame rather than the tenth second.
+ *
+ * The first alert is what the pacing is measured from, not the onset,
+ * because the onset is not something anyone sees: it is a slope in a chart
+ * nobody has opened yet. What a person opening the link notices is a unit
+ * turning, and they give it about two seconds.
  *
  * The intervals are what they always were (13 s onset→amber, 10 s
  * amber→red) and that is deliberate: the ramp rate is `12 °C` divided by the
- * first of them, so holding it fixed keeps the climb, the fitted °C/min the
- * rail reports, and every number written about them unchanged. Only the
- * moment the story starts has moved, because the first person to open this
- * cold gave it less time than the old onset alone.
+ * first of them, so holding it fixed keeps the climb — and the six-hour
+ * projection the amber reads off it — the same physics. Only where the story
+ * stands when the console arrives has moved.
  */
 export const DEFAULT_TIMELINE: IncidentTimeline = {
-  onsetMs: PREROLL_MS + PREROLL_LEAD_MS,
-  amberAtMs: PREROLL_MS + 15_000,
-  redAtMs: PREROLL_MS + 25_000,
+  onsetMs: PREROLL_MS + PREROLL_LEAD_MS - 13_000,
+  amberAtMs: PREROLL_MS + PREROLL_LEAD_MS,
+  redAtMs: PREROLL_MS + PREROLL_LEAD_MS + 10_000,
 };
 
 /** Failing-channel gain ramp: live trace amplitude vs reference across the scan window. */

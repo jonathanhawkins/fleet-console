@@ -516,8 +516,9 @@ describe("worker host — the run arrives with a past", () => {
 
     const afterGreeting = out.slice(1);
     expect(afterGreeting.length).toBeGreaterThan(0);
-    // A fresh, calm pre-roll carries telemetry and nothing else: no alert has
-    // fired yet, and replaying statuses here would double the greeting's.
+    // A fresh pre-roll carries telemetry and nothing else — the climb, but no
+    // alert: none has fired yet, and replaying statuses here would double the
+    // greeting's.
     expect(afterGreeting.every((m) => m.t === "telemetry")).toBe(true);
   });
 
@@ -534,7 +535,7 @@ describe("worker host — the run arrives with a past", () => {
     expect(n07.length).toBeGreaterThanOrEqual(PREROLL_MS / 100 - 1);
   });
 
-  it("ends the history before the first beat, so the greeting is of a calm fleet", () => {
+  it("ends the history before the first alert, so the greeting is of a fleet that has not yet turned", () => {
     const port = new FakePort();
     startSimWorkerHost(port);
     port.emit({ type: "init", seed: 42 });

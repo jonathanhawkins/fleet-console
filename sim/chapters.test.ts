@@ -50,7 +50,9 @@ describe("seeking to a storyline chapter", () => {
       offsetTimeline: DEFAULT_OFFSET_TIMELINE,
     } as Parameters<typeof chapterBeatMs>[0];
 
-    expect(chapterBeatMs(cfg, "knee")).toBe(DEFAULT_TIMELINE.onsetMs);
+    // The knee's beat is its amber: the onset is inside the history a run is
+    // handed, and the first thing anyone sees is the unit turning.
+    expect(chapterBeatMs(cfg, "knee")).toBe(DEFAULT_TIMELINE.amberAtMs);
     expect(chapterBeatMs(cfg, "nav")).toBe(DEFAULT_NAV_TIMELINE.blockAtMs);
     expect(chapterBeatMs(cfg, "cohort")).toBe(DEFAULT_COHORT_TIMELINE.onsetMs);
     expect(chapterBeatMs(cfg, "offset")).toBe(DEFAULT_OFFSET_TIMELINE.alertAtMs);
@@ -58,7 +60,7 @@ describe("seeking to a storyline chapter", () => {
 
   it("lands short of the beat, never on it, and never below zero", () => {
     const cfg = {
-      timeline: { ...DEFAULT_TIMELINE, onsetMs: 1_000 },
+      timeline: { ...DEFAULT_TIMELINE, onsetMs: 0, amberAtMs: 1_000 },
       navTimeline: DEFAULT_NAV_TIMELINE,
       cohortTimeline: DEFAULT_COHORT_TIMELINE,
       offsetTimeline: DEFAULT_OFFSET_TIMELINE,

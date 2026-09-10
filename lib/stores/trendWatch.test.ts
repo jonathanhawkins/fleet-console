@@ -253,8 +253,8 @@ describe("selectTrendingUnits — the seam between runs", () => {
 
 describe("the history the watch is handed", () => {
   it("is longer than the window it has to fill", () => {
-    // PREROLL_MS is why the rail can name a suspect six seconds after someone
-    // opens the page instead of ten: the run arrives with a past. If it ever
+    // PREROLL_MS is why the rail can name a suspect on the first frame instead
+    // of ten seconds in: the run arrives with a past, and the climb is in it. If it ever
     // drops below the fit window the watch is back to refusing to answer until
     // it has accumulated one live, and nobody waits that long.
     expect(PREROLL_MS).toBeGreaterThan(TREND_WINDOW_MS);

@@ -348,7 +348,8 @@ export const SPECIMENS: readonly Specimen[] = [
   },
   {
     name: "UnitCard",
-    purpose: "One home in the fleet, as a fixed-height row that links to its unit.",
+    purpose:
+      "One home in the fleet, as a row that links to its unit. One fixed height, and one exception.",
     usage: `<UnitCard unitId="N-07" name="Elm House" status="red" battery={93} recency="just now" />`,
     props: [
       { name: "unitId", type: "string", note: "Also the link target: /unit/<id>." },
@@ -410,6 +411,18 @@ export const SPECIMENS: readonly Specimen[] = [
           status="nominal"
           battery={73}
           recency="just now"
+        />
+        {/* The one row that is not 72px tall: a unit still reading nominal
+            with a joint climbing under it. The third line is what the row has
+            to say about the other two, so the row grows to hold it and keeps
+            the padding of the two above. */}
+        <UnitCard
+          unitId="N-04"
+          name="Taylor Bend"
+          status="nominal"
+          battery={88}
+          recency="just now"
+          trend={{ joint: "knee_L", cPerMin: 18 }}
         />
       </div>
     ),

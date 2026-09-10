@@ -8,7 +8,11 @@ import {
   type UnitStatus,
 } from "@/lib/schema";
 import { resetTrendWatchForTests, useFleetStore } from "@/lib/stores";
-import { UNIT_CARD_HEIGHT, type UnitCardProps } from "@/components/console";
+import {
+  UNIT_CARD_HEIGHT,
+  UNIT_CARD_TRENDING_HEIGHT,
+  type UnitCardProps,
+} from "@/components/console";
 
 interface UnitCardModule {
   UnitCard: (props: UnitCardProps) => React.ReactElement;
@@ -595,12 +599,24 @@ describe("rail height", () => {
     return el;
   };
 
+  /** Where the virtualizer put each mounted row, and how tall it made it. */
+  const laidOut = (): Array<{ top: number; height: number }> =>
+    Array.from(scrollport().firstElementChild?.children ?? [], (row) => {
+      const { transform, height } = (row as HTMLElement).style;
+      return {
+        top: Number(/translateY\((-?[\d.]+)px\)/.exec(transform)?.[1]),
+        height: Number.parseFloat(height),
+      };
+    });
+
   it("derives its height from its rows: a fleet that fits is shown whole", () => {
     expect(railScrollportHeight(5, () => UNIT_CARD_HEIGHT)).toBe(5 * UNIT_CARD_HEIGHT);
     // a row that grew a line grows the rail by that line, not by a scroll
-    expect(railScrollportHeight(5, (i) => (i === 1 ? 94 : UNIT_CARD_HEIGHT))).toBe(
-      UNIT_CARD_HEIGHT * 4 + 94,
-    );
+    expect(
+      railScrollportHeight(5, (i) =>
+        i === 1 ? UNIT_CARD_TRENDING_HEIGHT : UNIT_CARD_HEIGHT,
+      ),
+    ).toBe(UNIT_CARD_HEIGHT * 4 + UNIT_CARD_TRENDING_HEIGHT);
   });
 
   it("floors at MIN_VISIBLE_ROWS, so an empty or tiny fleet does not fold the shell up", () => {
@@ -615,7 +631,7 @@ describe("rail height", () => {
       UNIT_CARD_HEIGHT * MAX_VISIBLE_ROWS,
     );
     // the cap is a fixed figure — a trending row in a big fleet does not nudge it
-    expect(railScrollportHeight(MAX_VISIBLE_ROWS + 1, () => 94)).toBe(
+    expect(railScrollportHeight(MAX_VISIBLE_ROWS + 1, () => UNIT_CARD_TRENDING_HEIGHT)).toBe(
       UNIT_CARD_HEIGHT * MAX_VISIBLE_ROWS,
     );
     // …and exactly MAX_VISIBLE_ROWS is still "fits", measured from its rows
@@ -636,8 +652,38 @@ describe("rail height", () => {
     });
     expect(screen.getByText("Trending")).toBeVisible();
     expect(scrollport().style.height).toBe(
-      `${Math.max(floor, 2 * UNIT_CARD_HEIGHT + 94)}px`,
+      `${Math.max(floor, 2 * UNIT_CARD_HEIGHT + UNIT_CARD_TRENDING_HEIGHT)}px`,
     );
+  });
+
+  it("positions every row from the height that row renders at", () => {
+    // Roster order, no filter: the one path where the list of ids is the same
+    // array before and after a unit starts trending, so nothing about the
+    // list itself can be what tells the virtualizer that a row grew. If the
+    // rows are positioned from stale heights, the row below the tall one is
+    // laid *inside* it and its title lands on the trend line.
+    useFleetStore.getState().applySnapshot(snapshot());
+    render(<FleetRail />);
+    expect(laidOut()).toEqual([
+      { top: 0, height: UNIT_CARD_HEIGHT },
+      { top: UNIT_CARD_HEIGHT, height: UNIT_CARD_HEIGHT },
+      { top: 2 * UNIT_CARD_HEIGHT, height: UNIT_CARD_HEIGHT },
+    ]);
+
+    act(() => {
+      feed("N-02", 20, { knee_L: 20 });
+    });
+
+    expect(laidOut()).toEqual([
+      { top: 0, height: UNIT_CARD_HEIGHT },
+      { top: UNIT_CARD_HEIGHT, height: UNIT_CARD_TRENDING_HEIGHT },
+      { top: UNIT_CARD_HEIGHT + UNIT_CARD_TRENDING_HEIGHT, height: UNIT_CARD_HEIGHT },
+    ]);
+    // …and the list is exactly as tall as its rows, so the scrollport it
+    // fills ends on the last row rather than on a strip of dead ground.
+    expect(scrollport().firstElementChild).toHaveStyle({
+      height: `${2 * UNIT_CARD_HEIGHT + UNIT_CARD_TRENDING_HEIGHT}px`,
+    });
   });
 
   it("holds a fleet larger than the cap to MAX_VISIBLE_ROWS tall and virtualizes the rest", () => {

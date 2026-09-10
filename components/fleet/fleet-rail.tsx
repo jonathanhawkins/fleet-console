@@ -177,17 +177,33 @@ export function FleetRail() {
     overscan: OVERSCAN,
   });
 
-  // The virtualizer memoizes its measurements on count/keys/size-cache and not
-  // on the identity of `estimateSize`, so anything that can change what index
-  // N is (a row starting to trend, a filter or sort reshuffling the list)
-  // needs the cache dropped or the list keeps laying rows out at stale
-  // heights. `visibleIds` changes for every one of those reasons — trending
-  // truth is one of its own dependencies — so keying the effect on it alone
-  // covers filtering, ordering AND trending in one place. Never runs on a
-  // telemetry batch: nothing here is in the batch's write path.
+  /**
+   * The shape the virtualizer is laying out, as a key: one mark per row,
+   * standing for that row's height.
+   *
+   * The virtualizer memoizes its measurements on count and its own size cache
+   * and never on `estimateSize` or on what it returns, so a list whose row
+   * heights changed without its count changing has to drop that cache by hand
+   * or every row below the one that grew is positioned from the old number.
+   *
+   * Height here is a function of exactly two facts — which ids are in the
+   * list, and which of them are trending — so this key moves for filtering,
+   * for re-ordering and for a unit entering or leaving the watch, and holds
+   * still for a trend restating its rate, which changes a row's *text* and
+   * not its height. The identity of `visibleIds` is not that fact and cannot
+   * stand in for it: in roster order with no filter the memo returns the very
+   * array it was handed, so the signal never fired and a row that grew a line
+   * was laid over by the row beneath it. Never runs on a telemetry batch:
+   * nothing here is in the batch's write path.
+   */
+  const rowHeightKey = React.useMemo(
+    () => visibleIds.map((id) => (trendingIds.has(id) ? "T" : ".")).join(""),
+    [visibleIds, trendingIds],
+  );
+
   React.useEffect(() => {
     virtualizer.measure();
-  }, [visibleIds, virtualizer]);
+  }, [rowHeightKey, virtualizer]);
 
   React.useEffect(() => {
     if (!focusPending.current) return;

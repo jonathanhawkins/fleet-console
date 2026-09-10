@@ -28,18 +28,27 @@ export const UNIT_CARD_HEIGHT = 72;
  * The one exception, and it is a *size* rather than a squeeze.
  *
  * A trending row has a third line to print, and 72px cannot hold three without
- * dropping the row's internal padding from 13.6px to 2.9px — which is not a
- * denser row, it is a broken one. Growing the box by exactly one line plus one
- * gap keeps the padding identical to every other row in the rail, so the
- * trending row reads as a row with more to say rather than as a row that has
- * been crushed. Typically 0 or 1 rows in the fleet are ever this tall.
+ * dropping the row's internal padding from 13.1px to 2.4px — which is not a
+ * denser row, it is a broken one. Growing the box by exactly one line plus the
+ * gap that carries it keeps the padding identical to every other row in the
+ * rail, so the trending row reads as a row with more to say rather than as a
+ * row that has been crushed. Typically 0 or 1 rows in the fleet are this tall.
  *
- * Kept in step with the `h-[94px]` below by hand, the same way UNIT_CARD_HEIGHT
+ * That gap is 8px rather than the row's usual 6, which is where the two odd
+ * pixels come from. The third line is derived from the second and the two are
+ * the same small type, so on the row's own gap they read as one two-line
+ * paragraph instead of a statement and the conclusion drawn from it. Matching
+ * the first gap's *number* would not match its space — the line above it
+ * carries the chip, whose taller box lends that gap leading this one does not
+ * have. Two more px seats the line; four would separate it, and the row would
+ * start reading as two blocks stacked rather than as one row.
+ *
+ * Kept in step with the `h-[96px]` below by hand, the same way UNIT_CARD_HEIGHT
  * has always been kept in step with `h-[72px]`: the virtualizer needs the
  * number in JS and the row needs it in a class, and a CSS variable in between
  * would put a layout-critical measurement somewhere neither can typecheck.
  */
-export const UNIT_CARD_TRENDING_HEIGHT = 94;
+export const UNIT_CARD_TRENDING_HEIGHT = 96;
 
 export interface UnitCardProps extends Omit<
   React.ComponentPropsWithoutRef<"a">,
@@ -142,9 +151,9 @@ export function UnitCard({
         .join(" ")}
       className={cn(
         "flex flex-col justify-center gap-1.5 border-b border-line px-5",
-        // See UNIT_CARD_TRENDING_HEIGHT: one line and one gap taller, so the
+        // See UNIT_CARD_TRENDING_HEIGHT: one line and its gap taller, so the
         // third line arrives without spending the row's breathing room.
-        trend ? "h-[94px]" : "h-[72px]",
+        trend ? "h-[96px]" : "h-[72px]",
         "transition-colors duration-[var(--dur-micro)] ease-console",
         "hover:bg-surface-2",
         // The cohort mark: a 3px rule inside the leading edge, in the neutral
@@ -209,6 +218,8 @@ export function UnitCard({
 
       {/* The watch. Below the measurements because it is derived from
           them — the row states what it read, then what that reading implies.
+          `mt-0.5` on top of the row's gap says exactly that: 2px is not a
+          division, it is the beat before a conclusion (UNIT_CARD_TRENDING_HEIGHT).
 
           One warm word and nothing else: `--warn-ink` on the page ground, no
           tint, no border, no pill. The ATTENTION chip one line up is the same
@@ -216,7 +227,7 @@ export function UnitCard({
           under — an operator scanning the rail finds the chips first and this
           second, which is the order the severities actually run in. */}
       {trend ? (
-        <span className="flex items-center gap-1.5 text-label text-warn-ink">
+        <span className="mt-0.5 flex items-center gap-1.5 text-label text-warn-ink">
           <span className="shrink-0 uppercase">Trending</span>
           <span aria-hidden className="shrink-0 text-ink-muted">
             ·

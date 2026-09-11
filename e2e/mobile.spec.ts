@@ -269,6 +269,15 @@ test("phone: fleet → tap N-07 → descent → verdict sheet → return with in
   await expect(overlay).toBeVisible();
   await expect(page.getByRole("heading", { name: "Incident history" })).toHaveCount(0);
 
+  // Chromium on a loaded runner swallows a tap that lands within about a
+  // second of that release: the page sees touchstart and touchend on the chip
+  // and nothing after them, and the same tap a second later clicks. The
+  // likeliest reading is the rule that a finger arriving mid-fling stops the
+  // fling and is not a click, reached through the emulated touch path even
+  // though the handle declares touch-action: none. So the fling is waited out
+  // rather than tapped through: one tap, one restore. A retry would also pass,
+  // and would hide a chip that had learned to ignore its first tap.
+  await page.waitForTimeout(1_500);
   await restoreChip.tap();
   await expect(sheet).toBeVisible();
   await expect.poll(offset, { timeout: 2000 }).toBe(0);

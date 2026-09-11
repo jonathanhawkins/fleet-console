@@ -1,11 +1,35 @@
 # Cloudflare Pages headers for the static export.
-# Hashed build output is immutable; HTML and the worker entry must revalidate.
+# Hashed build output is immutable; HTML and the RSC payloads revalidate.
 /_next/static/*
   Cache-Control: public, max-age=31536000, immutable
+# Unlike everything under /_next/static, these are referenced by fixed names
+# (CHASSIS_MODEL_URL, WIREFRAME_URL, STYLE_URL), so a regenerated file ships to
+# the same URL with nothing to bust the cache. A week of that is a week of a
+# returning visitor holding a model this build no longer produces. An hour of
+# freshness with a week of stale-while-revalidate keeps the refetch off the
+# critical path without letting the staleness run. Hash the filenames if these
+# ever change often enough for an hour to matter.
 /models/*
-  Cache-Control: public, max-age=604800
+  Cache-Control: public, max-age=3600, stale-while-revalidate=604800
 /map/*
-  Cache-Control: public, max-age=604800
+  Cache-Control: public, max-age=3600, stale-while-revalidate=604800
+
+# The documents, and the RSC payloads the router fetches instead of them on a
+# client-side navigation. Every one of these is rewritten by every build and
+# served from a path with no hash in it, so the only correct answer is "ask
+# again". Cloudflare's default for an uncovered path happens to be exactly
+# this — declared here because a default is not a guarantee, and because the
+# line above claims the behaviour as if this file enforced it. Written as
+# specific paths rather than a blanket rule so that nothing here can reach
+# /_next/static/* and undo the year above.
+/
+  Cache-Control: public, max-age=0, must-revalidate
+/system
+  Cache-Control: public, max-age=0, must-revalidate
+/unit/*
+  Cache-Control: public, max-age=0, must-revalidate
+/*.txt
+  Cache-Control: public, max-age=0, must-revalidate
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
@@ -15,8 +39,12 @@
   # Origins: connect-src and img-src carry the one third-party origin in the
   # app (the basemap's tiles, glyphs and sprites); everything else is
   # same-origin, so no other host can be reached for anything. blob: is
-  # MapLibre's worker and its tile bitmaps; the sim's own worker is a bundled
-  # same-origin chunk.
+  # load-bearing for BOTH workers, and the second one is easy to miss: it is
+  # MapLibre's worker and its tile bitmaps, and it is also how the sim's own
+  # worker starts — Turbopack fetches the worker chunks and hands
+  # `new Worker()` a `URL.createObjectURL(new Blob([...]))` bootstrap rather
+  # than a same-origin path. Removing blob: here does not merely drop the
+  # basemap; it stops the simulator, and with it every number in the console.
   #
   # 'unsafe-inline' on script-src is not a shortcut — it is what a static
   # export costs. Next streams the RSC payload as a run of inline

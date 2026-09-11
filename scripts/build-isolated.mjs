@@ -334,10 +334,28 @@ if (signal) {
   process.exit(1);
 }
 
+/**
+ * Turbopack answers `new Worker(new URL("./sim.worker.ts", import.meta.url))`
+ * twice: with the compiled worker chunk the browser actually starts, and with a
+ * verbatim copy of the TypeScript source, emitted beside the fonts and
+ * referenced by nothing that runs. Publishing it means publishing unbundled
+ * source carrying an unresolved path alias, served as a file type no host has
+ * an opinion about. The build that produced it is the right place to withdraw
+ * it — media/ holds fonts and images, so a .ts in there is always this.
+ */
+function pruneWorkerSource(dir) {
+  const media = join(dir, "_next", "static", "media");
+  if (!existsSync(media)) return;
+  for (const name of readdirSync(media)) {
+    if (name.endsWith(".ts")) rmSync(join(media, name), { force: true });
+  }
+}
+
 if (status === 0 && existsSync(join(scratch, "out"))) {
   guardedRm(outDir);
   mkdirSync(dirname(outDir), { recursive: true });
   cpSync(join(scratch, "out"), outDir, { recursive: true });
+  pruneWorkerSource(outDir);
   console.log(`build-isolated: static export -> ${relative(repoRoot, outDir)}/`);
 }
 

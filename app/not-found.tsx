@@ -1,5 +1,17 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ConsoleButton, ConsoleHeader } from "@/components/console";
+
+/**
+ * Its own name, so a dead link does not preview as the front door.
+ *
+ * No address block: this route has no canonical URL to claim — it is whatever
+ * was asked for and missing. Next marks the export's 404 `noindex` on its own.
+ */
+export const metadata: Metadata = {
+  title: "Page not found",
+  description: "This page is not part of the console. The link may be out of date.",
+};
 
 /**
  * Whatever the browser asked for is not one of this console's routes — a

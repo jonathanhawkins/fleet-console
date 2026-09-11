@@ -1,1 +1,0 @@
-Fleet Console: "A glance, then a named failed part." A warm-white operator console above a black diagnostic band reading KNEE_L · ACTUATOR A-07, gain anomaly, with a parts manifest marking that actuator DAMAGED.

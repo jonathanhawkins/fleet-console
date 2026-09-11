@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, JetBrains_Mono } from "next/font/google";
 import { ConsoleFooter } from "@/components/console";
 import { SITE_URL } from "@/lib/constants";
+import { routeAddress, SITE_NAME } from "@/lib/metadata";
 import { SimReset, StorylineJump, TelemetryProvider } from "@/components/fleet";
 import "./globals.css";
 
@@ -10,19 +11,46 @@ const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
   display: "swap",
+  weight: ["400", "500"],
 });
 
-/** Machine space. Everything the robot says, it says in this. */
+/**
+ * Machine space. Everything the robot says, it says in this.
+ *
+ * `preload: false` because machine space is opt-in and off by default. Left to
+ * itself, next/font emits a `<link rel="preload">` for this face in every
+ * document, and it is the *larger* of the two — 40 KB against Geist's 29 — so
+ * the majority of visitors, who never open the descent, were being made to
+ * fetch more mono than operator type before first paint.
+ *
+ * The `@font-face` and the CSS variable stay declared globally: `--font-space`
+ * resolves this under `[data-space="machine"]`, and the descent has to find it
+ * already defined. What goes is only the forced fetch — the browser now loads
+ * it the first time machine-space text actually renders, which `display: swap`
+ * and the descent's own 350 ms wipe cover between them.
+ */
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   subsets: ["latin"],
   display: "swap",
+  preload: false,
+  weight: ["400", "500"],
 });
 
+/**
+ * The product in one sentence, kept under 160 characters.
+ *
+ * That ceiling is a search snippet's, not a preview card's — the card would
+ * take three hundred — but this one string is the fallback description for
+ * every route that does not write its own, so a length that truncates
+ * truncates site-wide. The disclaimer stays inside the limit rather than being
+ * the clause that gets cut: the one thing a card must not do is imply the
+ * fleet is real.
+ */
 const DESCRIPTION =
-  "Eight home humanoid robots, joint telemetry at 10 Hz, and one incident that " +
-  "walks an operator from a calm map into the machine's own diagnostics. " +
-  "A design and engineering demo; all data is simulated.";
+  "Eight home humanoid robots, joint telemetry at 10 Hz, and one incident " +
+  "traced to a named failed part. A design and engineering demo; all data " +
+  "is simulated.";
 
 /**
  * `metadataBase` is what turns the file-convention images into the absolute
@@ -35,22 +63,24 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Fleet Console",
-    template: "%s · Fleet Console",
+    default: SITE_NAME,
+    template: `%s · ${SITE_NAME}`,
   },
   description: DESCRIPTION,
-  applicationName: "Fleet Console",
-  openGraph: {
-    type: "website",
-    siteName: "Fleet Console",
-    title: "Fleet Console",
-    description: DESCRIPTION,
-    url: "/",
-  },
+  applicationName: SITE_NAME,
+  /**
+   * Deliberately no `openGraph.title`/`description`.
+   *
+   * Leaving those two unset means Next falls back to each page's own
+   * `title`/`description` for `og:*`, so every route gets a correct card
+   * without restating the parts that are the same everywhere. The address and
+   * the fields a route must not drop when it overrides this block come from
+   * `routeAddress`; the image comes from the `opengraph-image.png` file
+   * convention beside this file.
+   */
+  ...routeAddress("/"),
   twitter: {
     card: "summary_large_image",
-    title: "Fleet Console",
-    description: DESCRIPTION,
   },
 };
 

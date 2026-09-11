@@ -46,8 +46,15 @@ export default function FleetPage() {
       <link rel="preload" as="fetch" href="/map/fleet-light.json" crossOrigin="" />
 
       <ConsoleHeader>
+        {/* The one link on this page that does not pay for itself in advance.
+            A static export makes every route prefetch-eligible in full, and
+            the gallery's payload is an order of magnitude larger than a unit's
+            — spent, by default, on a route that is not on the path anyone
+            comes here to watch. The unit links keep their prefetch: making the
+            drill-in instant is the whole point of the golden path. */}
         <Link
           href="/system"
+          prefetch={false}
           className="rounded-sm text-label text-ink-soft uppercase transition-colors duration-[var(--dur-micro)] ease-console hover:text-ink"
         >
           Design system

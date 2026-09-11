@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ConsoleHeader } from "@/components/console";
 import { LiveConnectionStatus } from "@/components/fleet";
+import { routeAddress } from "@/lib/metadata";
 import { FLEET_UNITS } from "@/sim/engine";
 import { UnitDetail } from "./unit-detail";
 
@@ -40,9 +41,31 @@ export function generateStaticParams(): Array<{ id: string }> {
  */
 export const dynamicParams = false;
 
+/**
+ * Each unit's own card, not the site's.
+ *
+ * Returning only a title left the other eight fields to inherit: all eight
+ * pages shipped the root's generic description, and `openGraph.url` — declared
+ * once in the layout as "/" — told every unfurler that a link to N-07 was a
+ * link to the homepage. Sharing the drill-in, which is the whole point of the
+ * demo, produced a card indistinguishable from sharing the front door.
+ *
+ * The house name comes from `FLEET_UNITS`, the roster `generateStaticParams`
+ * above already walks, so a card cannot name a unit the fleet does not have.
+ * All of this runs at build time; nothing here needs a server.
+ */
 export async function generateMetadata({ params }: UnitPageProps): Promise<Metadata> {
   const { id } = await params;
-  return { title: decodeURIComponent(id) };
+  const unitId = decodeURIComponent(id);
+  const unit = FLEET_UNITS.find((u) => u.id === unitId);
+  const title = unit ? `${unitId} · ${unit.name}` : unitId;
+  const description = unit
+    ? `Live joint telemetry and diagnostics for ${unit.name} (${unitId}), one of eight simulated home robots.`
+    : `Live joint telemetry and diagnostics for ${unitId}. All data is simulated.`;
+
+  // Title and description flow into `og:*` on their own; `routeAddress` carries
+  // the fields Next would otherwise drop when a route declares `openGraph`.
+  return { title, description, ...routeAddress(`/unit/${unitId}`) };
 }
 
 export default async function UnitPage({ params }: UnitPageProps) {

@@ -23,22 +23,22 @@ import { execSync } from "node:child_process";
  */
 
 /**
- * Two kilobytes, because the same commit does not gzip to the same size
- * everywhere: CI measured maplibre 0.9 KB heavier than this laptop and three
- * 0.9 KB heavier again, on identical sources. A tighter band fails on the
- * runner rather than on a regression, which is the wrong way for a gate to be
- * wrong. The drift these exist to catch — a chunk quietly acquiring a
- * dependency, a table left quoting a build two months gone — is tens of
- * kilobytes, not one.
+ * Two kilobytes, because the same commit does not gzip to the same size under
+ * every toolchain: a newer node's zlib measures maplibre 0.9 KB heavier than an
+ * older one and three 0.9 KB heavier again, on identical sources. A tighter
+ * band fails on whichever node the runner installed rather than on a
+ * regression, which is the wrong way for a gate to be wrong. The drift these
+ * exist to catch — a chunk quietly acquiring a dependency, a table left quoting
+ * a build two months gone — is tens of kilobytes, not one.
  */
 const BAND_KB = 2;
 
 /**
  * The model gets a wider band than the chunks, because its gzip size is the one
- * number here that depends on which zlib produced it. Node ships Chromium's
- * deflate, which takes different fast paths per CPU architecture, and the same
- * 200 KB binary gzips 4 KB heavier on the x86 runner than on an arm laptop —
- * where the JS chunks differ by under one. Six kilobytes covers that with room
+ * number here that turns on which zlib compressed it, not on what was built.
+ * Node's bundled zlib changed between 22.22.2 and 22.23.2 (1.2.12 to 1.3.1) and
+ * the same 200 KB binary comes out 3.9 KB heavier under the newer one — on one
+ * machine, where the JS chunks move under a kilobyte. Six kilobytes covers that
  * and still catches the twenty a grown model would add.
  */
 const MODEL_BAND_KB = 6;

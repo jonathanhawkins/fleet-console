@@ -5,7 +5,10 @@ import { ConsoleButton } from "@/components/console";
 import { clockTime } from "@/components/fleet/alert-lifecycle";
 import { useFleetStore, useIncidentStore } from "@/lib/stores";
 import { RecalibrateAction } from "./recalibrate";
-import { RESTORED_GATE_NOTE, RESTORED_GATE_SUFFIX } from "./recalibrate-copy";
+import {
+  RESTORED_GATE_NOTE,
+  RESTORED_GATE_SUFFIX,
+} from "@/lib/diagnostics/recalibrate-copy";
 import { SafeSitAction } from "./safe-sit";
 import {
   acknowledgedLabel,
@@ -17,7 +20,7 @@ import {
   postureGateLabel,
   RECORDED_NOTE,
   splitRecommendations,
-} from "./safe-sit-copy";
+} from "@/lib/diagnostics/safe-sit-copy";
 
 /**
  * The verdict's action rail: what the operator may do about the diagnosis,

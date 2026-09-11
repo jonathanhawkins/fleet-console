@@ -3,7 +3,12 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { machineJoint } from "./scan-copy";
-import { channelTone, gainRatio, rmsDelta, type ChannelTone } from "./waveform-math";
+import {
+  channelTone,
+  gainRatio,
+  rmsDelta,
+  type ChannelTone,
+} from "@/lib/diagnostics/waveform-math";
 
 /**
  * A channel, frozen — the evidence on the verdict card.

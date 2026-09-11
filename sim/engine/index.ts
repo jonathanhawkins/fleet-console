@@ -171,7 +171,9 @@ export function createSimEngine(options: SimEngineOptions = {}): SimEngine {
 
 export { BATCH_INTERVAL_MS, JOINTS, type Joint } from "./constants";
 export {
+  ADVANCE_LEAD_MS,
   CHAPTER_LEAD_MS,
+  chapterAdvanceMs,
   chapterBeatMs,
   chapterSeekMs,
   STORYLINE_CHAPTERS,

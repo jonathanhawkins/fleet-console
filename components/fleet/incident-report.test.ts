@@ -192,6 +192,28 @@ describe("incidentTimes", () => {
     });
   });
 
+  /**
+   * The journal is the session's; `startedAt` is the incident's.
+   *
+   * A storyline replay clears the audit log, and a report read afterwards used
+   * to say it did not know when its own scan began — while holding the answer
+   * on the record. Every span measured from that moment went blank with it.
+   */
+  it("keeps its own scan start when the session's journal has been cleared", () => {
+    const carried = { ...record, startedAt: report.ts - 15_000 };
+    expect(incidentTimes(carried, [], {}, []).diagnostic).toBe(report.ts - 15_000);
+  });
+
+  it("still prefers the journal, which knows about an abandoned earlier scan", () => {
+    const carried = { ...record, startedAt: report.ts - 60_000 };
+    expect(incidentTimes(carried, ALERTS, META, LOG).diagnostic).toBe(T0 + 5_600_000);
+  });
+
+  it("ignores a carried start that postdates the verdict it belongs to", () => {
+    const impossible = { ...record, startedAt: report.ts + 1_000 };
+    expect(incidentTimes(impossible, [], {}, []).diagnostic).toBeUndefined();
+  });
+
   it("is not closed by an alert the incident did not close", () => {
     expect(incidentTimes(record, ALERTS, {}, LOG).resolved).toBeUndefined();
   });

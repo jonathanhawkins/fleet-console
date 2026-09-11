@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { useMachineView } from "./diagnostic-view";
 
 /**
  * The fleet-wide blast radius, end to end, against the same static
@@ -17,6 +18,12 @@ import { expect, test } from "@playwright/test";
 
 const SIGNATURE = "Balance reflex latency above threshold";
 const CANARY = "All on firmware 2.4.1 — 0 of 4 units on 2.3.7 affected";
+
+/* These walk the dark diagnostic, which is opt-in: the console now opens a
+   scan in the calm operator-space panel by default. */
+test.beforeEach(async ({ page }) => {
+  await useMachineView(page);
+});
 
 test("cohort detected → rollout halted in time → staged rollback → resolution", async ({
   page,

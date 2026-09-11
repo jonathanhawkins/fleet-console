@@ -12,7 +12,12 @@ import {
 } from "@/lib/stores";
 import { cn } from "@/lib/utils";
 import { MachineControl } from "./machine-control";
-import { commandFill, commandLine, EXECUTE_NOTE, type ImpactLine } from "./safe-sit-copy";
+import {
+  commandFill,
+  commandLine,
+  EXECUTE_NOTE,
+  type ImpactLine,
+} from "@/lib/diagnostics/safe-sit-copy";
 
 /**
  * The controls in this console that move a robot, and everything the operator

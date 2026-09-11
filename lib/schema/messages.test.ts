@@ -419,3 +419,21 @@ describe("operatorCommandSchema", () => {
     expect(operatorCommandSchema.safeParse({ c: "SELF_DESTRUCT" }).success).toBe(false);
   });
 });
+
+describe("ADVANCE_STORYLINE", () => {
+  it("names a chapter, like the seek it is the gentler cousin of", () => {
+    expect(
+      operatorCommandSchema.parse({ c: "ADVANCE_STORYLINE", chapter: "cohort" }),
+    ).toEqual({
+      c: "ADVANCE_STORYLINE",
+      chapter: "cohort",
+    });
+    expect(
+      operatorCommandSchema.safeParse({ c: "ADVANCE_STORYLINE", chapter: "act three" })
+        .success,
+    ).toBe(false);
+    expect(operatorCommandSchema.safeParse({ c: "ADVANCE_STORYLINE" }).success).toBe(
+      false,
+    );
+  });
+});

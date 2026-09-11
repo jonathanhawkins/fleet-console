@@ -1,8 +1,8 @@
 # Performance receipts
 
 > Budget rows below are the output of `node scripts/check-budgets.mjs` on the
-> static export built 2026-09-04 (`/` 183.2 KB gz over 14 scripts,
-> `/unit/N-01` 192.2 KB gz over 16). The same check runs at the end of every
+> static export built 2026-09-09 (`/` 183.4 KB gz over 14 scripts,
+> `/unit/N-01` 188.8 KB gz over 15). The same check runs at the end of every
 > `pnpm e2e` and in CI, so these two numbers are enforced rather than
 > remembered. Two moves account for most of the growth from the first
 > 173.8 / 175.1 KB build: the incident-history, cohort and trend-watch work
@@ -29,11 +29,11 @@ the PRD §7 line itself, not current usage.
 
 | Budget | Measured | Verdict |
 | --- | --- | --- |
-| Fleet page initial JS < 200 KB gz | **183.2 KB gz** (modern browsers; 14 files) | **PASS** |
-| Unit page initial JS < 200 KB gz | **192.2 KB gz** (16 files) | **PASS** |
+| Fleet page initial JS < 200 KB gz | **183.4 KB gz** (modern browsers; 14 files) | **PASS** |
+| Unit page initial JS < 200 KB gz | **188.8 KB gz** (15 files) | **PASS** |
 | 60 fps during the descent | p95 frame **9.2 ms**, 1 of 974 frames > 16.7 ms (0.1%) | **PASS** |
 | Interaction latency < 100 ms | Run-diagnostic press → visible feedback **1.3 ms** | **PASS** |
-| Component view (three + GLB) < 500 KB gz | 249.4 + 72.3 = **321.7 KB gz**, lazy | **PASS** |
+| Component view (three + GLB) < 500 KB gz | 249.6 + 84.3 = **334.0 KB gz**, lazy | **PASS** |
 | Telemetry batched at 10 Hz, one commit per batch | 79.2 batches/s for 8 units (= 8 × 9.9 Hz) | **PASS** |
 
 ## Bundle: initial JS per route
@@ -45,12 +45,12 @@ request it).
 
 | Route | Next "First Load JS" | Measured JS (gz) | CSS (gz) | HTML (gz) |
 | --- | --- | --- | --- | --- |
-| `/` (fleet) | 190 kB | **183.1 KB** | 15.0 KB | 4.5 KB |
-| `/unit/[id]` | 198 kB | **192.1 KB** | 15.0 KB | 7.4 KB |
+| `/` (fleet) | 191 kB | **183.4 KB** | 15.2 KB | 5.2 KB |
+| `/unit/[id]` | 197 kB | **188.8 KB** | 15.2 KB | 7.7 KB |
 | legacy-only polyfill (`noModule`) | — | 38.5 KB | — | — |
 
 `zod/mini` holds both routes under budget: the schema layer and worker-host protocol
-cost 12.9 KB gz there, against ~66 KB gz for method-chained zod 4 (migration story in
+cost 17.0 KB gz there, against ~66 KB gz for method-chained zod 4 (migration story in
 the appendix).
 
 ## Code splitting: what loads late, and how big it is
@@ -61,11 +61,11 @@ is on the fleet page.
 
 | Lazy bundle | Trigger | Raw | Gzip |
 | --- | --- | --- | --- |
-| maplibre-gl (map region) | fleet page mount (`next/dynamic`, ssr:false) | 1026.2 KB | **268.6 KB** |
-| machine space (descent stage) | incident banner mount (warm-up) / first descent | 175.1 KB | **56.1 KB** |
-| three + R3F (component view) | unit page, on scroll approach | 953.2 KB | **249.4 KB** |
-| `chassis-silhouette.glb` | component view | 181.9 KB | **72.3 KB** |
-| `chassis-wireframe.json` | parts-manifest board, on descent | 35.6 KB | **9.7 KB** |
+| maplibre-gl (map region) | fleet page mount (`next/dynamic`, ssr:false) | 1031.3 KB | **270.5 KB** |
+| machine space (descent stage) | incident banner mount (warm-up) / first descent | 140.4 KB | **45.0 KB** |
+| three + R3F (component view) | unit page, on scroll approach | 954.0 KB | **249.6 KB** |
+| `chassis-silhouette.glb` | component view | 199.9 KB | **84.3 KB** |
+| `chassis-wireframe.json` | parts-manifest board, on descent | 76.9 KB | **18.4 KB** |
 
 ### The model wireframe's share of the machine chunk
 

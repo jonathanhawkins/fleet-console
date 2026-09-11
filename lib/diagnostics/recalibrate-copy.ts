@@ -1,5 +1,5 @@
-import { POSTURE_GATE_SUFFIX, type ImpactLine } from "./safe-sit-copy";
-import { gainRatio, rmsDelta } from "./waveform-math";
+import { POSTURE_GATE_SUFFIX, type ImpactLine } from "@/lib/diagnostics/safe-sit-copy";
+import { gainRatio, rmsDelta } from "@/lib/diagnostics/waveform-math";
 
 /**
  * What the console is allowed to say about a recalibration.

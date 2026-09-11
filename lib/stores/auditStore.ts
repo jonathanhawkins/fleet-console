@@ -169,3 +169,13 @@ export const selectUnitAuditLog =
   (unitId: string) =>
   (s: AuditState): AuditEntry[] =>
     s.entries.filter((e) => e.unitId === unitId);
+
+/**
+ * Has this unit done anything worth logging? A boolean, so it is safe to
+ * subscribe bare — and cheap enough to ask before deciding whether to fetch
+ * the module that renders the answer.
+ */
+export const selectHasUnitAuditLog =
+  (unitId: string) =>
+  (s: AuditState): boolean =>
+    s.entries.some((e) => e.unitId === unitId);

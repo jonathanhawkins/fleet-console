@@ -8,7 +8,7 @@ import {
   type ManifestEntry,
   type ManifestGroup,
   type ManifestState,
-} from "./manifest-spec";
+} from "@/lib/diagnostics/manifest-spec";
 import { pad4 } from "./scan-copy";
 
 /**

@@ -75,12 +75,17 @@ function runDiagnostic(): void {
   });
 }
 
-/** A scan the console did not start, arriving on the wire and being adopted. */
+/**
+ * A scan the console did not start, arriving on the wire and being adopted —
+ * then opened in machine space, because these tests are about two *surfaces*
+ * contending for the page lock and an adopted scan alone now stays calm.
+ */
 function scanStarts(): void {
   act(() => {
     useIncidentStore
       .getState()
       .applyDiagEvent({ t: "diag_event", unitId: "N-07", ev: { k: "scan_start" } });
+    useIncidentStore.getState().watchSession();
   });
 }
 

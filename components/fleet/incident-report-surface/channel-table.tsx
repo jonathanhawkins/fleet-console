@@ -1,12 +1,12 @@
 "use client";
 
-import { residualReading } from "@/components/machine/recalibrate-copy";
+import { residualReading } from "@/lib/diagnostics/recalibrate-copy";
 import {
   channelTone,
   gainRatio,
   rmsDelta,
   type ChannelTone,
-} from "@/components/machine/waveform-math";
+} from "@/lib/diagnostics/waveform-math";
 import { type VerdictReport } from "@/lib/schema";
 import { type DiagChannel } from "@/lib/stores";
 import { cn } from "@/lib/utils";

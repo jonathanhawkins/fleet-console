@@ -55,6 +55,19 @@ beforeAll(async () => {
 /** Store writes reach React, so they are state updates and belong in act(). */
 const dispatch = (fn: () => void) => act(() => fn());
 
+/**
+ * Start a scan and step into machine space.
+ *
+ * A scan opens on the calm operator-space panel now, so the descent is a door
+ * rather than a destination. Tests about what the gate does *once the operator
+ * is through it* open it here; the tests about the gate's own conditions, above,
+ * deliberately do not.
+ */
+const startScanInMachineSpace = (unitId = "N-07") => {
+  useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" }, unitId));
+  useIncidentStore.getState().watchSession();
+};
+
 beforeEach(() => {
   useIncidentStore.getState().reset();
   document.documentElement.removeAttribute(DESCENT_ATTR);
@@ -148,7 +161,7 @@ describe("DescentOverlay — trigger discipline", () => {
   it("descends once the sim answers, and drains the page under it", async () => {
     render(<DescentOverlay unitId="N-07" />);
     dispatch(() => useIncidentStore.getState().beginDescent("N-07"));
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
 
     await waitFor(() => expect(overlay()).not.toBeNull());
     expect(document.documentElement.getAttribute(DESCENT_ATTR)).toBe("under");
@@ -166,16 +179,23 @@ describe("DescentOverlay — trigger discipline", () => {
     expect(overlay()).toBeNull();
   });
 
-  it("adopts a scan already in flight when the page joins late", async () => {
+  it("adopts a scan already in flight without descending on the operator", async () => {
     // No beginDescent: this console did not start the scan, it walked into it.
+    // The scan is adopted — but a page that has just loaded has nobody who
+    // asked for machine space, so it stays in operator space with the panel.
     render(<DescentOverlay unitId="N-07" />);
     dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    expect(useIncidentStore.getState().phase).toBe("scanning");
+    expect(overlay()).toBeNull();
+
+    // …and the door still opens.
+    dispatch(() => useIncidentStore.getState().watchSession());
     await waitFor(() => expect(overlay()).not.toBeNull());
   });
 
   it("releases the page when the overlay leaves", async () => {
     const view = render(<DescentOverlay unitId="N-07" />);
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     await waitFor(() => expect(overlay()).not.toBeNull());
 
     view.unmount();
@@ -193,7 +213,7 @@ describe("DescentOverlay — trigger discipline", () => {
    */
   it("tears down no session state when it unmounts mid-scan", async () => {
     const view = render(<DescentOverlay unitId="N-07" />);
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     dispatch(() =>
       useIncidentStore
         .getState()
@@ -223,7 +243,7 @@ describe("DescentOverlay — trigger discipline", () => {
 describe("DescentOverlay — leaving a running scan", { timeout: 60_000 }, () => {
   it("comes down on leaveSession and stays down while the scan runs on", async () => {
     render(<DescentOverlay unitId="N-07" />);
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     await waitFor(() => expect(overlay()).not.toBeNull());
 
     dispatch(() => useIncidentStore.getState().leaveSession());
@@ -262,7 +282,7 @@ describe("DescentOverlay — leaving a running scan", { timeout: 60_000 }, () =>
 
   it("re-descends on watchSession onto the scan as it stands now", async () => {
     render(<DescentOverlay unitId="N-07" />);
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     await waitFor(() => expect(overlay()).not.toBeNull());
     dispatch(() => useIncidentStore.getState().leaveSession());
     await acrossFrames(() => expect(overlay()).toBeNull());
@@ -293,7 +313,7 @@ describe("DescentOverlay — leaving a running scan", { timeout: 60_000 }, () =>
 
   it("does not re-open unasked when the page remounts mid-scan", async () => {
     const view = render(<DescentOverlay unitId="N-07" />);
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     await waitFor(() => expect(overlay()).not.toBeNull());
     dispatch(() => useIncidentStore.getState().leaveSession());
     await acrossFrames(() => expect(overlay()).toBeNull());
@@ -355,7 +375,7 @@ describe("DescentOverlay — occlusion signal", { timeout: 60_000 }, () => {
     // The adopt path on purpose: a mid-scan reload mounts this exact way, and
     // the signal must initialise un-occluded until the replayed wipe lands.
     render(<DescentOverlay unitId="N-07" />);
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     await waitFor(() => expect(overlay()).not.toBeNull());
 
     // The surface is still climbing: the page underneath is visible and live.
@@ -376,7 +396,7 @@ describe("DescentOverlay — occlusion signal", { timeout: 60_000 }, () => {
   it("draws the same boundaries around the reduced-motion crossfade", async () => {
     stubMotionPreference(true);
     render(<DescentOverlay unitId="N-07" />);
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     await waitFor(() => expect(overlay()).not.toBeNull());
 
     // Crossfade at full opacity — the reduced timeline's wipe-complete.
@@ -389,7 +409,7 @@ describe("DescentOverlay — occlusion signal", { timeout: 60_000 }, () => {
 
   it("never leaves the signal stuck if the stage is torn down mid-scan", async () => {
     const view = render(<DescentOverlay unitId="N-07" />);
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     await acrossFrames(() => expect(isDescentOccluded()).toBe(true));
 
     view.unmount();
@@ -527,7 +547,7 @@ describe("DescentOverlay — the ascent keeps its session", { timeout: 60_000 },
     // `startedAt` it opened with, and the shared ticker is seeded when the
     // header mounts — so the header reads T+00:25 without a timer to race.
     clock = T0 + 25_000;
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     dispatch(() => {
       const store = useIncidentStore.getState();
       for (const path of [

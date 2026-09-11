@@ -25,7 +25,7 @@ export const OFFSET_COMPONENT = "actuator_A12";
 /**
  * The encoder's zero error in the channel's normalized units: a DC displacement
  * of the whole trace, NOT a scaling. The RMS deviation IS the displacement, so
- * 0.21 lands clear of RMS_FAILING (components/machine/waveform-math.ts).
+ * 0.21 lands clear of RMS_FAILING (lib/diagnostics/waveform-math.ts).
  */
 export const OFFSET_BIAS = 0.21;
 

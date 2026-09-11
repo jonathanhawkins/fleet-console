@@ -47,3 +47,17 @@ export function chapterBeatMs(cfg: EngineConfig, chapter: StorylineChapter): num
 export function chapterSeekMs(cfg: EngineConfig, chapter: StorylineChapter): number {
   return Math.max(0, chapterBeatMs(cfg, chapter) - CHAPTER_LEAD_MS);
 }
+
+/**
+ * The shorter lead an *advance* lands with. A seek is pressed by someone who
+ * then looks up at a board they have not seen in a while; an advance fires
+ * as the operator files an incident and turns back to the fleet, and the next
+ * act should be arriving as they do — long enough for the page to change
+ * under them, not long enough to wonder whether anything will.
+ */
+export const ADVANCE_LEAD_MS = 4_000;
+
+/** Where the clock lands for an advance to a chapter: its beat, less the shorter lead. */
+export function chapterAdvanceMs(cfg: EngineConfig, chapter: StorylineChapter): number {
+  return Math.max(0, chapterBeatMs(cfg, chapter) - ADVANCE_LEAD_MS);
+}

@@ -15,6 +15,7 @@ import {
   descentTimeline,
   usePageLock,
   usePrefersReducedMotion,
+  warmMachineFont,
 } from "@/components/console";
 
 /**
@@ -88,6 +89,7 @@ let warmed: Promise<unknown> | null = null;
  */
 export function preloadMachineSpace(): void {
   warmed ??= importStage();
+  warmMachineFont();
 }
 
 export interface DescentOverlayProps {

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { useMachineView } from "./diagnostic-view";
 
 /**
  * The golden path again, on a phone, by touch.
@@ -25,6 +26,12 @@ async function expectNoHorizontalScroll(page: Page, where: string) {
   });
   expect(overflow, `page scrolls horizontally at ${where}`).toBeLessThanOrEqual(0);
 }
+
+/* These walk the dark diagnostic, which is opt-in: the console now opens a
+   scan in the calm operator-space panel by default. */
+test.beforeEach(async ({ page }) => {
+  await useMachineView(page);
+});
 
 test("phone: fleet → tap N-07 → descent → verdict sheet → return with incident logged", async ({
   page,

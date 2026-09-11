@@ -71,7 +71,7 @@ export const OFFSET_FAULT: ScriptedFault = {
 /**
  * The knee's re-measured gain ramp after a calibration: the correctable
  * component is gone, the wear-driven ramp stays, and the RMS lands between
- * RMS_HEALTHY and RMS_FAILING (components/machine/waveform-math.ts), alert →
+ * RMS_HEALTHY and RMS_FAILING (lib/diagnostics/waveform-math.ts), alert →
  * warn. sim/diagnostics.test.ts holds that band as a contract.
  */
 export const CALIB_GAIN_START = 1.18;

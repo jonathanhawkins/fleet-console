@@ -7,9 +7,15 @@ import {
   type UnitStatus,
   type VerdictReport,
 } from "@/lib/schema";
-import { useAuditStore, useFleetStore, useIncidentStore } from "@/lib/stores";
+import {
+  selectAlertMeta,
+  useAuditStore,
+  useFleetStore,
+  useIncidentStore,
+} from "@/lib/stores";
 import { type TelemetryTransport } from "@/lib/transport";
 import { IncidentBanner, incidentHeadline, verdictLine } from "./incident-banner";
+import { setDiagnosticView } from "@/lib/prefs/diagnostic-view";
 import { setCommandTransport } from "./telemetry-command";
 
 /**
@@ -86,6 +92,8 @@ beforeEach(() => {
 
 afterEach(() => {
   setCommandTransport(null);
+  // The view preference is real localStorage and outlives a test otherwise.
+  setDiagnosticView("calm");
 });
 
 describe("incidentHeadline", () => {
@@ -118,14 +126,26 @@ describe("IncidentBanner", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("states the incident in plain words and offers exactly one action", () => {
+  it("states the incident in plain words and offers one action on the robot", () => {
     seed("amber");
     raise("amber", "Sagebrush House: left knee actuator running hot");
     render(<IncidentBanner unitId="N-07" />);
 
     expect(screen.getByText("Left knee actuator running hot")).toBeVisible();
-    expect(screen.getByRole("button")).toHaveAccessibleName("Run diagnostic");
-    expect(screen.getAllByRole("button")).toHaveLength(1);
+    // The single dark pill is the diagnostic. Acknowledging stands beside it in
+    // the quiet variant: ownership of the alert, not an action on the robot.
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.map((b) => b.getAttribute("aria-label") ?? b.textContent)).toEqual([
+      "Acknowledge alert on N-07",
+      "Run diagnostic",
+    ]);
+    expect(screen.getByRole("button", { name: "Run diagnostic" })).toHaveAttribute(
+      "data-variant",
+      "primary",
+    );
+    expect(
+      screen.getByRole("button", { name: "Acknowledge alert on N-07" }),
+    ).toHaveAttribute("data-variant", "secondary");
   });
 
   it("sends RUN_DIAGNOSTIC and opens the session as one act", async () => {
@@ -164,8 +184,9 @@ describe("IncidentBanner", () => {
     // (run-diagnostic.tsx).
     expect(screen.getByText("Diagnostic in progress", { selector: "p" })).toBeVisible();
     expect(screen.getByText("Left knee actuator overheating")).toBeVisible();
-    // No action while the operator is in machine space: the descent is covering
-    // this page, so anything offered here is offered to nobody.
+    // No action, and in the calm default no way *in* either: the scan is on
+    // this page already, in the panel below. A "view" control here would offer
+    // a second copy of what the operator is looking at.
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
 
     act(() => {
@@ -174,6 +195,26 @@ describe("IncidentBanner", () => {
         .applyDiagEvent({ t: "diag_event", unitId: "N-07", ev: { k: "scan_start" } });
     });
     expect(screen.getByText("Diagnostic in progress", { selector: "p" })).toBeVisible();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("becomes the way back in when machine space is the chosen view", async () => {
+    setDiagnosticView("machine");
+    seed("red");
+    raise("red", "Sagebrush House: left knee actuator overheating");
+    render(<IncidentBanner unitId="N-07" />);
+    await userEvent.click(screen.getByRole("button", { name: "Run diagnostic" }));
+
+    // The press put the operator in machine space, so the descent is covering
+    // this page and anything offered here is offered to nobody.
+    expect(useIncidentStore.getState().watching).toBe(true);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+
+    act(() => {
+      useIncidentStore
+        .getState()
+        .applyDiagEvent({ t: "diag_event", unitId: "N-07", ev: { k: "scan_start" } });
+    });
 
     // …and the moment they step back out of it, the banner is the way back in.
     act(() => useIncidentStore.getState().leaveSession());
@@ -425,7 +466,11 @@ const CLEAN: VerdictReport = {
   recommendations: [],
 };
 
-function diagnose(report: VerdictReport, outcome?: "partial" | "cleared") {
+function diagnose(
+  report: VerdictReport,
+  outcome?: "partial" | "cleared",
+  acknowledge: readonly string[] = [],
+) {
   act(() => {
     const incident = useIncidentStore.getState();
     incident.beginDescent("N-07");
@@ -448,9 +493,62 @@ function diagnose(report: VerdictReport, outcome?: "partial" | "cleared") {
         },
       });
     }
+    for (const action of acknowledge) incident.acknowledgeRecommendation(action);
     incident.completeAscent();
   });
 }
+
+/**
+ * The banner after the operator has acted on what it recommended.
+ *
+ * "Service recommended" is the console advising. Once Dispatch service is on
+ * the incident the advice has been taken, and a headline still recommending it
+ * is the console telling an operator to do the thing they just did — which is
+ * what it did until this test existed.
+ */
+describe("IncidentBanner — once service has been asked for", () => {
+  it("stops recommending service and states that it was requested", () => {
+    seed("red");
+    raise("red", "Sagebrush House: left knee actuator overheating");
+    diagnose(REPORT, undefined, ["Dispatch service"]);
+    render(<IncidentBanner unitId="N-07" />);
+
+    expect(screen.getByText("Diagnostic complete — service requested")).toBeVisible();
+    expect(screen.queryByText(/service recommended/i)).not.toBeInTheDocument();
+  });
+
+  it("goes on recommending it when the operator recorded something else", () => {
+    seed("red");
+    raise("red", "Sagebrush House: left knee actuator overheating");
+    diagnose(REPORT, undefined, ["Disable joint"]);
+    render(<IncidentBanner unitId="N-07" />);
+
+    expect(screen.getByText("Diagnostic complete — service recommended")).toBeVisible();
+  });
+
+  it("still reports a cleared fault as cleared, whatever was recorded", () => {
+    seed("amber");
+    raise("amber", "Sagebrush House: left knee actuator running hot");
+    diagnose(REPORT, "cleared", ["Dispatch service"]);
+    render(<IncidentBanner unitId="N-07" />);
+
+    // A van on the record does not un-fix a joint the link corrected.
+    expect(screen.getByText("Diagnostic complete — fault cleared")).toBeVisible();
+  });
+
+  it("keeps the amber: requested is not repaired", () => {
+    seed("red");
+    raise("red", "Sagebrush House: left knee actuator overheating");
+    diagnose(REPORT, "partial", ["Dispatch service"]);
+    render(<IncidentBanner unitId="N-07" />);
+
+    expect(screen.getByText("Diagnostic complete — service requested")).toBeVisible();
+    expect(document.querySelector('[data-slot="incident-banner"]')).toHaveAttribute(
+      "data-status",
+      "warn",
+    );
+  });
+});
 
 /**
  * The half of the recalibration act that happens back in operator space.
@@ -571,5 +669,50 @@ describe("IncidentBanner — alert lifecycle", () => {
     raise("amber", "Sagebrush House: left knee actuator running hot", "al-later");
 
     expect(useFleetStore.getState().alertMeta["al-later"]?.resolvedAt).toBeUndefined();
+  });
+});
+
+describe("IncidentBanner — acknowledging from the unit's own page", () => {
+  it("offers Acknowledge while the newest alert is nobody's, and takes every standing alert on the unit", async () => {
+    seed("red");
+    raise("amber", "Elm House: left knee actuator trending hot", "al-amber");
+    raise(
+      "red",
+      "Elm House: left knee actuator overheating, torque ripple detected",
+      "al-red",
+    );
+    render(<IncidentBanner unitId="N-07" />);
+
+    const button = screen.getByRole("button", { name: "Acknowledge alert on N-07" });
+    expect(screen.queryByText("Acknowledged")).not.toBeInTheDocument();
+
+    await userEvent.click(button);
+
+    // The unit, not the event: the amber the red escalated is taken with it.
+    const fleet = useFleetStore.getState();
+    expect(selectAlertMeta("al-red")(fleet)?.ackedAt).toBeDefined();
+    expect(selectAlertMeta("al-amber")(fleet)?.ackedAt).toBeDefined();
+    // and the banner now says so, with nothing left to press but the pill
+    expect(screen.getByText("Acknowledged")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Acknowledge alert on N-07" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /run diagnostic/i })).toBeVisible();
+  });
+
+  it("does not offer it once the alert has been taken from the feed", () => {
+    seed("red");
+    raise(
+      "red",
+      "Elm House: left knee actuator overheating, torque ripple detected",
+      "al-red",
+    );
+    useFleetStore.getState().ackAlert("al-red");
+    render(<IncidentBanner unitId="N-07" />);
+
+    expect(
+      screen.queryByRole("button", { name: /acknowledge/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Acknowledged")).toBeVisible();
   });
 });

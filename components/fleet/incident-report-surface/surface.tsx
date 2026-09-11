@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { calendarDate, timeZoneLabel } from "../alert-lifecycle";
-import { residualReading } from "@/components/machine/recalibrate-copy";
+import { residualReading } from "@/lib/diagnostics/recalibrate-copy";
 import { type VerdictReport } from "@/lib/schema";
 import {
   selectAlerts,
@@ -15,7 +15,7 @@ import { jointLabel, useNow } from "@/components/console";
 import { AuditChronology } from "../audit-log";
 import { componentForJoint, componentLabel, type ComponentId } from "../component-spec";
 import { verdictLine } from "../incident-banner";
-import { incidentRef } from "../incident-history";
+import { incidentRef } from "../incident-ref";
 import {
   escalatedTier,
   incidentSpans,

@@ -15,7 +15,8 @@ import {
 } from "@/lib/session/storyline-session";
 import { useIncidentStore, type IncidentRecord } from "@/lib/stores";
 import { startStatusRecorder } from "./status-history";
-import { setCommandTransport } from "./telemetry-command";
+import { sendCommand, setCommandTransport } from "./telemetry-command";
+import { bindStorylineChain } from "./storyline-chain";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -84,6 +85,8 @@ export function TelemetryProvider() {
       transport = failedTransport();
     }
     setCommandTransport(transport);
+    // The next act meets the operator on the way back from the last one.
+    const unbindChain = bindStorylineChain(sendCommand);
     const unbind = bindTransport(transport);
     const stopRecorder = startStatusRecorder();
 
@@ -118,6 +121,7 @@ export function TelemetryProvider() {
       window.clearInterval(tick);
       unwatchHistory();
       stopRecorder();
+      unbindChain();
       setCommandTransport(null);
       unbind();
     };

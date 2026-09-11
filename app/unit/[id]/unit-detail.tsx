@@ -1,23 +1,29 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { ConsoleButton, ConsoleCard } from "@/components/console";
 import {
   BackToFleet,
   ComponentView,
   DescentOverlay,
+  DiagnosticGate,
   IncidentBanner,
-  IncidentHistory,
   IncidentReport,
   JointGrid,
-  SessionLog,
   StatusTimeline,
   TelemetryCursorMeta,
   UnitIdentity,
   useHasIncidentHistory,
   useMarkUnitVisited,
 } from "@/components/fleet";
-import { selectUnit, selectUnitIds, useFleetStore } from "@/lib/stores";
+import {
+  selectHasUnitAuditLog,
+  selectUnit,
+  selectUnitIds,
+  useAuditStore,
+  useFleetStore,
+} from "@/lib/stores";
 
 /**
  * The unit drill-in, client-rendered end to end.
@@ -93,6 +99,10 @@ export function UnitDetail({ unitId }: { unitId: string }) {
           and it holds the only primary action in the product. */}
       <IncidentBanner unitId={unitId} />
 
+      {/* The scan, on the page that motivated it. Mounts with the session and
+          leaves with it; the descent below is the same session, opted into. */}
+      <DiagnosticGate unitId={unitId} />
+
       {/* What the descent left behind. Renders nothing until a scan has
           reached a verdict and the operator has come back up with it. */}
       <UnitIncidentLog unitId={unitId} />
@@ -101,7 +111,7 @@ export function UnitDetail({ unitId }: { unitId: string }) {
           acks, scans, commands, resolutions — collapsed until asked for. It
           sits under the incident history because it is the evidence behind it,
           and there is no fleet-wide equivalent on purpose (audit-log.tsx). */}
-      <SessionLog unitId={unitId} />
+      <UnitSessionLog unitId={unitId} />
 
       <ConsoleCard label="Status timeline" labelAs="h2">
         <StatusTimeline unitId={unitId} />
@@ -153,6 +163,53 @@ export function UnitDetail({ unitId }: { unitId: string }) {
  * bordered box with a heading over it — a section that exists only to say it
  * has no content is a section that should not have rendered.
  */
+/**
+ * Both of these are already conditional at runtime — the log renders nothing
+ * without an incident, and the session list opens closed. But a runtime `if`
+ * is not an import boundary: the modules shipped in this route's initial JS on
+ * all eight units regardless, 12 KB gz of chronology rendering for a card most
+ * visits never open. `useHasIncidentHistory` stays a normal import; it is a
+ * store selector, and the page has to be able to ask the question cheaply
+ * before deciding whether to fetch the answer.
+ */
+const IncidentHistory = dynamic(
+  () => import("@/components/fleet/incident-history").then((m) => m.IncidentHistory),
+  {
+    ssr: false,
+    // Its card is already on screen by the time this resolves — only the body
+    // arrives late, so the body is what has to hold its place. One record's
+    // worth of rhythm: a verdict line, its gap, and the row of references
+    // under it, which is what a unit that has been diagnosed once shows.
+    loading: () => <div className="min-h-[3.5rem]" />,
+  },
+);
+
+const SessionLog = dynamic(
+  () => import("@/components/fleet/audit-log").then((m) => m.SessionLog),
+  {
+    ssr: false,
+    // The closed card is the card's own header row and nothing else, so the
+    // fallback is that row. Safe to reserve because the gate below only
+    // renders this once the log has entries — an empty one would be space
+    // held for something that is never going to arrive.
+    loading: () => <ConsoleCard label="Session log" labelAs="h2" padding="none" />,
+  },
+);
+
+/**
+ * The session log, or nothing — decided out here rather than inside the chunk.
+ *
+ * The module answers this question too, but only after it has been fetched,
+ * which is the wrong order: a unit nobody has touched would pay for the whole
+ * chronology renderer to be told it has nothing to render. Same bargain as the
+ * incident log below it (incident-ref.ts).
+ */
+function UnitSessionLog({ unitId }: { unitId: string }) {
+  const has = useAuditStore(selectHasUnitAuditLog(unitId));
+  if (!has) return null;
+  return <SessionLog unitId={unitId} />;
+}
+
 function UnitIncidentLog({ unitId }: { unitId: string }) {
   const has = useHasIncidentHistory(unitId);
   if (!has) return null;

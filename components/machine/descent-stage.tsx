@@ -16,7 +16,11 @@ import { FlagBeat } from "./flag-beat";
 import { BootProvider, useBoot } from "./boot-variants";
 import { closeDescent } from "./leave-descent";
 import { MachineControl } from "./machine-control";
-import { buildManifest, manifestCleared, MANIFEST_ROWS } from "./manifest-spec";
+import {
+  buildManifest,
+  manifestCleared,
+  MANIFEST_ROWS,
+} from "@/lib/diagnostics/manifest-spec";
 import { CommandStatusLine } from "./execute-action";
 import { pad2 } from "./scan-copy";
 import { ScanColumns } from "./scan-columns";

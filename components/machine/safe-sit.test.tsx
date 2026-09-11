@@ -34,7 +34,7 @@ import {
   postureGateLabel,
   resetAcknowledgedTimes,
   splitRecommendations,
-} from "./safe-sit-copy";
+} from "@/lib/diagnostics/safe-sit-copy";
 import { VerdictCard } from "./verdict-card";
 
 /**
@@ -141,12 +141,24 @@ afterEach(() => setCommandTransport(null));
 
 describe("safe-sit-copy", () => {
   it("splits the report's recommendations by what pressing them does", () => {
-    // The report's own order survives within each group: RECALIBRATE leads the
-    // recommendations and leads EXECUTE.
+    // RECALIBRATE leads the report; SAFE SIT leads EXECUTE, because it is the
+    // control that seats the unit a recalibration requires. Listing the gated
+    // rung above the one that ungates it would be the console recommending
+    // something it has itself disabled. RECORD keeps the wire's order.
     expect(splitRecommendations(report.recommendations)).toEqual({
-      execute: ["Recalibrate joint", "Command safe sit"],
+      execute: ["Command safe sit", "Recalibrate joint"],
       record: ["Disable joint", "Dispatch service"],
     });
+  });
+
+  it("keeps the report's order among executed actions it has no ladder for", () => {
+    // Only the two rungs are ranked; anything else the wire executes stays put.
+    expect(
+      splitRecommendations(["Recalibrate joint", "Command safe sit"]).execute,
+    ).toEqual(["Command safe sit", "Recalibrate joint"]);
+    expect(splitRecommendations(["Command safe sit"]).execute).toEqual([
+      "Command safe sit",
+    ]);
   });
 
   it("matches the executable recommendations by identity, not by position", () => {

@@ -11,8 +11,9 @@ import * as React from "react";
  * from this loop. The alternative, a rAF per component, is the standard way a
  * dashboard ends up with twenty schedulers, twenty callbacks the browser has
  * to reconcile against one vsync, and no single place to measure or throttle.
- * Here there is exactly one, it runs only while something is subscribed, and
- * the frame timestamp every subscriber sees is the same instant.
+ * Here there is exactly one, it runs only while something is subscribed and
+ * the tab is on screen, and the frame timestamp every subscriber sees is the
+ * same instant.
  *
  * The API is deliberately not "a hook that owns a canvas": the descent registers
  * callbacks that draw six waveforms into one canvas, and a per-canvas hook
@@ -31,6 +32,7 @@ export type FrameCallback = (now: number) => void;
 
 const subscribers = new Set<FrameCallback>();
 let handle: number | null = null;
+let watching = false;
 
 function tick(now: number): void {
   handle = null;
@@ -49,8 +51,30 @@ function tick(now: number): void {
   schedule();
 }
 
+/** Resume the moment the tab comes back; the subscribers never knew it left. */
+function onVisibility(): void {
+  if (!document.hidden) schedule();
+}
+
+function watchVisibility(): void {
+  if (watching || typeof document === "undefined") return;
+  document.addEventListener("visibilitychange", onVisibility);
+  watching = true;
+}
+
+function unwatchVisibility(): void {
+  if (!watching) return;
+  document.removeEventListener("visibilitychange", onVisibility);
+  watching = false;
+}
+
 function schedule(): void {
   if (handle !== null || subscribers.size === 0) return;
+  // A tab that is not on screen is not compositing, so every frame drawn into
+  // it is work with no reader. Browsers throttle background rAF on their own,
+  // but throttled is not stopped, and this loop's subscribers are canvases —
+  // the difference is a laptop fan on a page nobody is looking at.
+  if (typeof document !== "undefined" && document.hidden) return;
   // Read off globalThis at call time rather than capturing at module load, so
   // a test can stub the scheduler and drive frames deterministically.
   const raf = globalThis.requestAnimationFrame;
@@ -64,13 +88,16 @@ function schedule(): void {
  */
 export function registerFrame(cb: FrameCallback): () => void {
   subscribers.add(cb);
+  watchVisibility();
   schedule();
   return () => {
     subscribers.delete(cb);
-    if (subscribers.size === 0 && handle !== null) {
+    if (subscribers.size > 0) return;
+    if (handle !== null) {
       globalThis.cancelAnimationFrame?.(handle);
       handle = null;
     }
+    unwatchVisibility();
   };
 }
 

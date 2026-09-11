@@ -1,18 +1,18 @@
-# Fleet Console
+# Robot Fleet Console
 
 [![CI](https://github.com/jonathanhawkins/fleet-console/actions/workflows/ci.yml/badge.svg)](https://github.com/jonathanhawkins/fleet-console/actions/workflows/ci.yml)
 
 A fleet-operations console for home humanoid robots. Eight units on a map,
 joint telemetry at 10 Hz, and one incident that carries an operator from a
-glance to a named failed part — then down into the robot's own diagnostic
-space to prove it. A design and engineering demo; all data is simulated.
+glance to a named failed part, with the evidence for it on screen. A design and
+engineering demo; all data is simulated.
 
 **[Live demo →](https://fleet-console.pages.dev)** — a static build with the
 simulator in a Web Worker. Nothing to wake up.
 
-![The golden path: the fleet page raises an alert on N-07, the unit page shows the left knee running hot, Run diagnostic descends into a dark mono diagnostic board that walks twenty subsystems and six live-versus-reference channels, and the verdict names the left knee actuator.](docs/evidence/golden-path.gif)
+![The golden path: the fleet page raises an alert on N-07, the unit page shows the left knee running hot, and Run diagnostic opens a diagnostic card in place — a counted scan, six live-versus-reference channels of which only the left knee separates from its reference, nine structure checks, and a verdict naming the left knee actuator.](docs/evidence/golden-path.gif)
 
-_[Watch it as video (54 s, MP4)](docs/evidence/golden-path.mp4)_
+_[Watch it as video (46 s, MP4)](docs/evidence/golden-path.mp4)_
 
 ## What to watch for
 
@@ -27,29 +27,45 @@ them. **0:02** N-07 goes `ATTENTION`; the map marker and the alert feed react
 in the same frame batch. **0:12** red.
 
 **Click N-07, then Run diagnostic.** Eighteen canvas instruments, and the left
-knee's three traces are the only warm thing on the page. The descent drains it,
-a black surface wipes up, and the type boots in phosphor mono. Fifteen seconds
-later the verdict reads `KNEE_L · ACTUATOR A-07 — GAIN ANOMALY`, with the
-evidence under it.
+knee's three traces are the only warm thing on the page. The scan opens in a
+card below the banner — it never takes the page, so the telemetry that sent you
+here stays where it is. A rule counts the twenty-six things the robot actually
+reports; six channels fill in against their factory reference, five vanishing
+into theirs and one visibly not. Fifteen seconds later the finding reads
+`Left knee · Actuator A-07 — gain anomaly`, with `0.187` standing in a column
+of `0.01x` beneath it.
 
-**Command safe sit, then CONFIRM.** The narration arrives from the wire —
-`GAIT ARRESTED` → `POSTURE SETTLED` — and N-07 stays red, because
-broken-but-safe is the honest state. **ESC** returns to operator space with the
-incident on file.
+**Command safe sit, then Confirm.** The gate opens with Cancel focused and says
+what the maneuver costs, including the line that matters: service is still
+required. The narration arrives from the wire, and N-07 stays red, because
+broken-but-safe is the honest state.
+
+**Machine view**, top right of that card, is the same scan told the other way:
+the page drains, a black surface wipes up, and the robot reports on itself in
+phosphor mono. It is off by default and it is not a re-run — both surfaces are
+projections of one session, so the board you arrive at is already mid-scan
+exactly where the card was.
 
 Three more storylines share the same clock: a blocked route that recovers
 itself, four units raising the same firmware warning with a staged rollback,
-and the one fault a recalibration genuinely fixes. _Jump to_ in the footer
-replays the run and stops eight seconds short of any of them. Full script in
+and the one fault a recalibration genuinely fixes. File the knee incident and
+the firmware cohort is pulled forward to meet you on the way back, with what
+you just did left standing; _Jump to_ in the footer replays the run and stops
+eight seconds short of any act. Full script in
 [docs/walkthrough.md](docs/walkthrough.md).
 
 ## Two worlds
 
 **Operator space** is warm white, Geist Sans, wide-tracked small-caps labels,
 pill buttons, muted sage and clay — the surface you glance at like a
-thermostat. **Machine space** is what the robot says about itself: phosphor
-mono on near-black, radius zero, hierarchy by luminance. Crossing between them
-is the whole interaction.
+thermostat, and it is where the whole diagnostic now happens. **Machine space**
+is what the robot says about itself: phosphor mono on near-black, radius zero,
+hierarchy by luminance. It is one control away and off by default — a register
+the operator can ask for, not one the console imposes.
+
+The two are not two implementations. One incident session drives both, so
+whichever is on screen is reading the same walked nodes, the same measured
+channels and the same verdict; the toggle changes the voice, never the facts.
 
 No component takes a `space` prop. Both worlds are one semantic token layer
 resolved twice under `[data-space]`, so a card has one implementation rather
@@ -97,11 +113,11 @@ summary.
 
 | Budget                                   | Measured                                 | Verdict |
 | ---------------------------------------- | ---------------------------------------- | ------- |
-| Fleet page initial JS < 200 KB gz        | **183.2 KB**                             | PASS    |
-| Unit page initial JS < 200 KB gz         | **192.2 KB**                             | PASS    |
+| Fleet page initial JS < 200 KB gz        | **183.4 KB**                             | PASS    |
+| Unit page initial JS < 200 KB gz         | **188.8 KB**                             | PASS    |
 | 60 fps during the descent                | p95 frame 9.2 ms, 1 of 974 over 16.7 ms  | PASS    |
 | Interaction latency < 100 ms             | Run-diagnostic press → feedback 1.3 ms   | PASS    |
-| Component view (three + GLB) < 500 KB gz | 321.7 KB, lazy                           | PASS    |
+| Component view (three + GLB) < 500 KB gz | 334.0 KB, lazy                           | PASS    |
 | 500 units                                | ~5,000 batches/s, 13.4 µs/msg, p95 10 ms | PASS    |
 
 Lighthouse is a gate, not a quote: `scripts/lighthouse.mjs` runs the desktop
@@ -112,9 +128,9 @@ on `/unit/N-01`, where eighteen live instruments put real work on the main
 thread at load. Reports in [docs/evidence/lighthouse/](docs/evidence/lighthouse/),
 method and hardware in [docs/perf.md](docs/perf.md).
 
-Lazy bundles, measured on the CI build: maplibre (271.4 KB gz) on fleet-page
-mount, machine space (56.1 KB gz) warmed by the incident banner,
-three + R3F (250.5 KB gz) on scroll approach.
+Lazy bundles, measured on the CI build: maplibre (270.5 KB gz) on fleet-page
+mount, machine space (45.0 KB gz) warmed by the incident banner,
+three + R3F (249.6 KB gz) on scroll approach.
 
 Two scripts keep this page honest, because a number a repo prints about itself
 is the last place drift should be allowed. `check-budgets.mjs` gates the table
@@ -124,7 +140,7 @@ prose and the artifact disagree.
 
 ## Testing
 
-`pnpm test` runs 1,542 specs across 99 files: console components, both stores'
+`pnpm test` runs 1,610 specs across 106 files: console components, both stores'
 reducers and guard rails, the transports against injected sockets and workers,
 the ordering gate under scripted disorder, and the sim engine's determinism.
 `pnpm e2e` builds the static export and runs five Playwright projects against

@@ -1,5 +1,6 @@
 "use client";
 
+import { serviceRequested } from "@/lib/diagnostics/service-request";
 import { type IncidentRecord } from "@/lib/stores";
 import { cn } from "@/lib/utils";
 import {
@@ -27,7 +28,7 @@ export function ServiceBlock({ record, now }: { record: IncidentRecord; now: num
   const service = serviceRecord(part);
   const due = serviceDueInDays(service);
   const serviced = serviceDateLabel(service, now);
-  const dispatched = record.acknowledged.some((a) => /dispatch/i.test(a));
+  const dispatched = serviceRequested(record.acknowledged);
 
   return (
     <ReportSection label="Service">

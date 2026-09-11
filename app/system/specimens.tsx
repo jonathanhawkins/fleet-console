@@ -7,6 +7,7 @@ import {
   ConsoleHeader,
   Disclosure,
   PostureTag,
+  ProgressRule,
   RegionNote,
   SectionLabel,
   StatGroup,
@@ -124,6 +125,55 @@ export const SPECIMENS: readonly Specimen[] = [
       <ConsoleCard label="Units" action={<StatusChip>8 live</StatusChip>}>
         <p className="text-small text-ink-soft">Card content.</p>
       </ConsoleCard>
+    ),
+  },
+  {
+    name: "ProgressRule",
+    purpose:
+      "A rule carrying a length something reported — a counted scan, a maneuver in flight.",
+    usage: `<ProgressRule value={0.54} now={14} max={26} labelledBy={labelId} />`,
+    props: [
+      {
+        name: "value",
+        type: "number",
+        fallback: "—",
+        note: "0…1, clamped. The fill is the value it was told; there is no indeterminate mode.",
+      },
+      {
+        name: "labelledBy",
+        type: "string",
+        fallback: "—",
+        note: "Id of the element naming the rule. Required: a bare bar names nothing.",
+      },
+      {
+        name: "now / max",
+        type: "number",
+        fallback: "—",
+        note: "Accessible value pair — “14 of 26 subsystems” reads better than “54%”. Omit both for percent.",
+      },
+      {
+        name: "tone",
+        type: `"ink" | "warn" | "alert"`,
+        fallback: `"ink"`,
+        note: "Colour of the fill. Alert is spent on a maneuver that failed, not on a scan that found something.",
+      },
+      {
+        name: "stalled",
+        type: "boolean",
+        fallback: "false",
+        note: "The source stopped reporting. Holds the fill and mutes it, so a stopped bar does not read as a slow one.",
+      },
+    ],
+    a11y: "role=progressbar with an explicit aria-labelledby. Pass now/max whenever the units are countable — a screen reader saying “14 of 26” is telling the operator what the bar is actually made of.",
+    render: () => (
+      <div className="flex w-full max-w-80 flex-col gap-3">
+        <ProgressRule value={0.54} now={14} max={26} labelledBy="specimen-progress" />
+        <ProgressRule value={0.3} tone="warn" labelledBy="specimen-progress" />
+        <ProgressRule value={0.72} stalled labelledBy="specimen-progress" />
+        <span id="specimen-progress" className="sr-only">
+          Specimen progress
+        </span>
+      </div>
     ),
   },
   {

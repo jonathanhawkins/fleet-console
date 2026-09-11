@@ -1,6 +1,7 @@
 "use client";
 
-import { type OperatorCommand } from "@/lib/schema";
+import { type OperatorCommand, type StorylineChapterName } from "@/lib/schema";
+import { readDiagnosticView } from "@/lib/prefs/diagnostic-view";
 import { useIncidentStore } from "@/lib/stores";
 import { type TelemetryTransport } from "@/lib/transport";
 
@@ -61,6 +62,11 @@ export function sendCommand(cmd: OperatorCommand): boolean {
 export function runDiagnostic(unitId: string): boolean {
   if (!sendCommand({ c: "RUN_DIAGNOSTIC", unitId })) return false;
   useIncidentStore.getState().beginDescent(unitId);
+  // Which surface this scan opens in. Read here — at the press — rather than
+  // inside the store, because `watching` means "the operator is in machine
+  // space right now" and every consumer of it depends on that staying true.
+  // A session that opened calm has nobody in machine space to be watching.
+  if (readDiagnosticView() === "machine") useIncidentStore.getState().watchSession();
   return true;
 }
 
@@ -124,6 +130,16 @@ export function commandRecalibrate(unitId: string): boolean {
  *
  * Returns false when there is no link to send on.
  */
+/**
+ * Pull the next act forward to meet the operator. The engine keeps the fleet
+ * as it stands and only moves the clock; a chapter already at hand is a no-op
+ * there, so this is safe to send on every filing. See storyline-chain.ts for
+ * when it is sent.
+ */
+export function advanceStoryline(chapter: StorylineChapterName): boolean {
+  return sendCommand({ c: "ADVANCE_STORYLINE", chapter });
+}
+
 export function haltRollout(): boolean {
   return sendCommand({ c: "HALT_ROLLOUT" });
 }

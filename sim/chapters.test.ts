@@ -1,9 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { fleetMessageSchema, type FleetMessage } from "@/lib/schema";
+import { fleetMessageSchema, type AlertMessage, type FleetMessage } from "@/lib/schema";
 import {
+  ADVANCE_LEAD_MS,
   BATCH_INTERVAL_MS,
   CHAPTER_LEAD_MS,
+  COHORT_ALERT_MESSAGE,
+  chapterAdvanceMs,
   chapterBeatMs,
   chapterSeekMs,
   createSimEngine,
@@ -146,5 +149,66 @@ describe("seeking to a storyline chapter", () => {
       }
     }
     expect(last).toBeGreaterThan(-Infinity);
+  });
+});
+
+/**
+ * Advancing, as distinct from seeking: the operator has just finished with
+ * something, and the next act should meet them without undoing it.
+ */
+describe("advancing the storyline to a chapter", () => {
+  const raised = (msgs: FleetMessage[]) =>
+    msgs.filter((m): m is AlertMessage => m.t === "alert");
+
+  it("brings the cohort forward to meet the operator without rebuilding the fleet", () => {
+    const engine = createSimEngine({ seed: 7 });
+    // A minute in: the knee has gone amber and red; nothing else has happened.
+    runTo(engine, 60_000);
+    const before = engine.snapshot().units.find((u) => u.id === "N-07");
+
+    const out = engine.handle({ c: "ADVANCE_STORYLINE", chapter: "cohort" });
+
+    // Not a reset: no fresh snapshot, and N-07 is the unit it was.
+    expect(out.some((m) => m.t === "fleet_snapshot")).toBe(false);
+    expect(engine.snapshot().units.find((u) => u.id === "N-07")).toEqual(before);
+    // The skipped span fired once, as history: N-03's route blocked on the way.
+    expect(raised(out).filter((m) => m.alert.unitId === NAV_UNIT_ID)).toHaveLength(1);
+    // …and the knee's beats, already behind us, did not fire again.
+    expect(raised(out).filter((m) => m.alert.unitId === "N-07")).toHaveLength(0);
+    // The chapter itself is still ahead, by exactly the lead.
+    expect(raised(out).some((m) => m.alert.message === COHORT_ALERT_MESSAGE)).toBe(false);
+    const soon: FleetMessage[] = [];
+    for (
+      let t = 60_000 + BATCH_INTERVAL_MS;
+      t <= 60_000 + ADVANCE_LEAD_MS + 500;
+      t += BATCH_INTERVAL_MS
+    ) {
+      soon.push(...engine.advance(t));
+    }
+    const first = raised(soon).find((m) => m.alert.message === COHORT_ALERT_MESSAGE);
+    expect(first?.alert.unitId).toBe("N-02");
+    for (const m of [...out, ...soon])
+      expect(fleetMessageSchema.safeParse(m).success).toBe(true);
+  });
+
+  it("is a no-op once the chapter is at hand or behind, so a second filing moves nothing", () => {
+    const engine = createSimEngine({ seed: 7 });
+    runTo(engine, 60_000);
+    engine.handle({ c: "ADVANCE_STORYLINE", chapter: "cohort" });
+    expect(engine.handle({ c: "ADVANCE_STORYLINE", chapter: "cohort" })).toEqual([]);
+    expect(engine.handle({ c: "ADVANCE_STORYLINE", chapter: "knee" })).toEqual([]);
+  });
+
+  it("lands short of the beat by its own, shorter lead", () => {
+    const cfg = {
+      timeline: DEFAULT_TIMELINE,
+      navTimeline: DEFAULT_NAV_TIMELINE,
+      cohortTimeline: DEFAULT_COHORT_TIMELINE,
+      offsetTimeline: DEFAULT_OFFSET_TIMELINE,
+    } as Parameters<typeof chapterAdvanceMs>[0];
+    expect(ADVANCE_LEAD_MS).toBeLessThan(CHAPTER_LEAD_MS);
+    expect(chapterAdvanceMs(cfg, "cohort")).toBe(
+      DEFAULT_COHORT_TIMELINE.onsetMs - ADVANCE_LEAD_MS,
+    );
   });
 });

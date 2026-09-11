@@ -25,8 +25,8 @@ import {
   RECAL_GATE_NOTE,
   residualDifferential,
   residualReading,
-} from "./recalibrate-copy";
-import { resetAcknowledgedTimes } from "./safe-sit-copy";
+} from "@/lib/diagnostics/recalibrate-copy";
+import { resetAcknowledgedTimes } from "@/lib/diagnostics/safe-sit-copy";
 import { VerdictCard } from "./verdict-card";
 
 /**

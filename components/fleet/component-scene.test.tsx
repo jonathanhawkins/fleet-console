@@ -225,7 +225,7 @@ describe("stale pointers (deferred capture)", () => {
   });
 });
 
-describe("tap-to-arrest (C7)", () => {
+describe("tap-to-arrest", () => {
   it("spends the tap that halts a coast on halting it — no selection", () => {
     const { host, headMesh, onSelect } = renderScene();
 
@@ -263,7 +263,7 @@ describe("tap-to-arrest (C7)", () => {
   });
 });
 
-describe("the ambient clock (C8)", () => {
+describe("the ambient clock", () => {
   it("rides the shared frame loop, never a private interval", () => {
     const setInterval = vi.spyOn(window, "setInterval");
     renderScene();

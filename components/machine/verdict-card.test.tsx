@@ -3,7 +3,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type DiagEventMessage, type VerdictReport } from "@/lib/schema";
 import { useIncidentStore, type DiagSession } from "@/lib/stores";
-import { resetAcknowledgedTimes } from "./safe-sit-copy";
+import { resetAcknowledgedTimes } from "@/lib/diagnostics/safe-sit-copy";
 import { pairJoint, VerdictCard, VerdictStrip } from "./verdict-card";
 
 /**

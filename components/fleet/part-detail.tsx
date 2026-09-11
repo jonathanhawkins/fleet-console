@@ -32,7 +32,7 @@ import {
   StatusChip,
   useNow,
 } from "@/components/console";
-import { incidentRef } from "./incident-history";
+import { incidentRef } from "./incident-ref";
 import { openIncidentReport } from "./incident-report";
 import { jointsForPart } from "./part-selection";
 import { ViewDiagnosticButton, useUnitDiagnostic } from "./run-diagnostic";

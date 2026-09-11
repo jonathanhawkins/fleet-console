@@ -16,6 +16,7 @@ import {
   needsAttention,
   type ConsoleButtonProps,
 } from "@/components/console";
+import { useDiagnosticView } from "@/lib/prefs/diagnostic-view";
 import { runDiagnostic } from "./telemetry-command";
 
 /* The diagnostic action and the one derivation every surface that offers it
@@ -93,7 +94,16 @@ export type UnitDiagnosticState =
 
 export interface UnitDiagnostic {
   state: UnitDiagnosticState;
-  /** A scan to go (back) into that the operator is not watching; false while descending. */
+  /**
+   * A machine-space session to go (back) into that the operator is not
+   * watching; false while descending.
+   *
+   * Only ever true when machine space is the operator's chosen view. In the
+   * calm default the scan and its verdict are already on the page, in the
+   * diagnostic panel, so a control offering to "view" them would be offering a
+   * second copy — and would quietly be a door into the surface the default
+   * exists to keep shut.
+   */
   viewable: boolean;
   /** The live session's verdict, in the `complete` state. */
   report: VerdictReport | null;
@@ -111,12 +121,17 @@ export function useUnitDiagnostic(unitId: string): UnitDiagnostic {
   const sessionUnitId = useIncidentStore(selectSessionUnitId);
   const report = useIncidentStore(selectSessionReport);
   const watching = useIncidentStore(selectWatching);
+  const view = useDiagnosticView();
   // Derived array selector, so useShallow (lib/stores/README.md).
   const history = useIncidentStore(useShallow(selectUnitHistory(unitId)));
 
   const mine = sessionUnitId === unitId;
   const archived = history[0]?.report ?? null;
-  const viewable = mine && !watching && (phase === "scanning" || phase === "verdict");
+  const viewable =
+    mine &&
+    !watching &&
+    view === "machine" &&
+    (phase === "scanning" || phase === "verdict");
 
   if (mine && (phase === "descending" || phase === "scanning")) {
     return { state: "running", viewable, report: null, archived };

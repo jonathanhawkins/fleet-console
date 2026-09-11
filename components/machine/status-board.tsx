@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { usePrefersReducedMotion } from "@/components/console";
-import { buildManifest } from "./manifest-spec";
+import { buildManifest } from "@/lib/diagnostics/manifest-spec";
 import { PartsManifest } from "./parts-manifest";
-import { isRestored } from "./recalibrate-copy";
+import { isRestored } from "@/lib/diagnostics/recalibrate-copy";
 import { machineComponent, machineJoint } from "./scan-copy";
 import { useDiagSession, useStackedScan } from "./scan-state";
 import { UnitSilhouette } from "./unit-silhouette";

@@ -112,7 +112,7 @@ export interface IncidentRecord {
   acknowledged: string[];
   /**
    * The session clock the verdict card's press times are keyed by
-   * (components/machine/safe-sit-copy.ts) — without it a report can list
+   * (lib/diagnostics/safe-sit-copy.ts) — without it a report can list
    * *what* an operator recorded but not *when*.
    */
   startedAt?: number;
@@ -293,11 +293,17 @@ export const useIncidentStore = create<IncidentState>()((set) => ({
       if (s.phase !== "idle") return s;
       // A new session is never a departing one: whatever was still leaving is
       // superseded by this, and a stage that opens on it starts from the store.
+      //
+      // `watching: false` is what makes the calm panel the default surface. A
+      // scan opens in operator space, on the page that motivated it; machine
+      // space is a door the operator opens from there, not the room they are
+      // put in. Nothing else about the session differs — both surfaces render
+      // this same state, which is why the flag can carry the whole decision.
       return {
         phase: "descending",
         session: freshSession(unitId),
         exiting: null,
-        watching: true,
+        watching: false,
       };
     }),
 
@@ -322,10 +328,12 @@ export const useIncidentStore = create<IncidentState>()((set) => ({
           return { phase: "scanning" };
         }
         if (s.phase === "idle") {
-          // Late joiner: adopt the in-flight scan. `watching: true` because the
-          // only way to arrive here is a console that has just loaded — a
-          // refresh mid-scan, or a second console — and the honest thing for it
-          // to render is the scan that is actually running.
+          // Late joiner: adopt the in-flight scan. The only way to arrive
+          // here is a console that has just loaded — a refresh mid-scan, or a
+          // second console — and the honest thing for it to render is the scan
+          // that is actually running. It renders it calmly, for the same
+          // reason a fresh press does: arriving mid-scan is not consent to be
+          // dropped into machine space.
           const session = freshSession(msg.unitId);
           audits.push({
             ts: session.startedAt,
@@ -336,7 +344,7 @@ export const useIncidentStore = create<IncidentState>()((set) => ({
           });
           // Same rule as `beginDescent`: this is a session opening, so nothing
           // is departing any more.
-          return { phase: "scanning", session, exiting: null, watching: true };
+          return { phase: "scanning", session, exiting: null, watching: false };
         }
         return s;
       }

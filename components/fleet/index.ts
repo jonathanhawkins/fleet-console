@@ -28,12 +28,14 @@ export { CohortCard } from "./cohort-card";
 /* -- the unit page -------------------------------------------------------- */
 export { BackToFleet, UnitIdentity } from "./unit-identity";
 export { IncidentBanner } from "./incident-banner";
-export { IncidentHistory, useHasIncidentHistory } from "./incident-history";
+export { IncidentHistory } from "./incident-history";
+export { incidentRef, useHasIncidentHistory } from "./incident-ref";
 export { IncidentReport } from "./incident-report-overlay";
 export { JointGrid, TelemetryCursorMeta } from "./joint-grid";
 export { StatusTimeline } from "./status-timeline";
 export { SessionLog } from "./audit-log";
 export { DescentOverlay } from "./descent-overlay";
+export { DiagnosticGate } from "./diagnostic-gate";
 export { ComponentView } from "./component-view";
 export { useMarkUnitVisited } from "./first-visit-nudge";
 

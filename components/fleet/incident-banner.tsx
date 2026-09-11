@@ -13,10 +13,14 @@ import {
   useFleetStore,
   useIncidentStore,
 } from "@/lib/stores";
+import { componentLabel } from "@/lib/diagnostics/part-label";
+import { serviceRequested } from "@/lib/diagnostics/service-request";
+import { readDiagnosticView } from "@/lib/prefs/diagnostic-view";
 import { cn } from "@/lib/utils";
 import { clockTime, durationSince } from "./alert-lifecycle";
 import { preloadMachineSpace } from "./descent-overlay";
 import {
+  ConsoleButton,
   jointLabel,
   registerFrame,
   SectionLabel,
@@ -47,10 +51,7 @@ export function incidentHeadline(message: string, unitName: string): string {
 export function verdictLine(report: VerdictReport): string {
   // The clean scan has no joint or component to name.
   if (report.anomaly === "none") return "Diagnostic complete — no anomaly.";
-  const component = report.component
-    .replace(/_/g, " ")
-    .replace(/\b([A-Z])(\d+)\b/g, "$1-$2");
-  return `${jointLabel(report.joint)} ${component}: ${report.anomaly} anomaly.`;
+  return `${jointLabel(report.joint)} ${componentLabel(report.component)}: ${report.anomaly} anomaly.`;
 }
 
 /**
@@ -304,6 +305,25 @@ export function IncidentBanner({ className, unitId, ...props }: IncidentBannerPr
   const firstRaisedAt = useFleetStore(selectUnitFirstRaisedAt(unitId));
   const now = useNow();
 
+  /**
+   * Take ownership from the unit's own page, not only from the feed.
+   *
+   * The feed acknowledges one alert at a time because a feed is a list of
+   * events. This page is about one robot, and an operator standing on it who
+   * says "I have this" means the robot — so every alert still standing on the
+   * unit is taken together, the amber and the red that escalated it alike.
+   * Straight to the store, like the feed: the ack IS the state, and it is in
+   * the audit log before this returns.
+   */
+  const acknowledgeUnit = React.useCallback(() => {
+    const fleet = useFleetStore.getState();
+    for (const alert of fleet.alerts) {
+      if (alert.unitId !== unitId) continue;
+      if (selectAlertMeta(alert.id)(fleet)?.resolvedAt !== undefined) continue;
+      fleet.ackAlert(alert.id);
+    }
+  }, [unitId]);
+
   // The incident that closes this unit's alerts out, if there is one.
   const history = useIncidentStore(useShallow(selectUnitHistory(unitId)));
   const record = history[0];
@@ -312,9 +332,16 @@ export function IncidentBanner({ className, unitId, ...props }: IncidentBannerPr
     record && record.report.anomaly !== "none" ? record.id : undefined,
   );
 
-  // Warm the machine-space chunk: the descent must not wait on a round trip.
+  /**
+   * Warm the machine-space chunk — but only for an operator who has asked for
+   * it. The descent still must not wait on a round trip, and for someone whose
+   * view is already `machine` the press is one click away. For everyone else it
+   * is 56 KB gz fetched on every troubled unit page for a surface they will
+   * never open; the panel's own `Machine view` control warms it on hover
+   * instead, which is early enough.
+   */
   React.useEffect(() => {
-    preloadMachineSpace();
+    if (readDiagnosticView() === "machine") preloadMachineSpace();
   }, []);
 
   // Nothing to say — through the reveal, so a banner closes rather than disappears.
@@ -330,6 +357,17 @@ export function IncidentBanner({ className, unitId, ...props }: IncidentBannerPr
    * diagnostic cleared" about the last diagnostic.
    */
   const restored = record?.calibration?.outcome === "cleared";
+
+  /**
+   * The operator has asked for a technician, and the incident says so.
+   *
+   * Until then the banner *recommends* service, which is the console advising.
+   * After it, the advice has been taken, and a headline still recommending it
+   * reads as a console that did not notice — the operator presses Dispatch
+   * service, the row stamps "recorded", and the sentence above it goes on
+   * telling them to do the thing they just did.
+   */
+  const requested = serviceRequested(record?.acknowledged ?? []);
 
   /**
    * A diagnosed incident is amber whatever the unit's status — unless the thing
@@ -352,7 +390,9 @@ export function IncidentBanner({ className, unitId, ...props }: IncidentBannerPr
       : resolved
         ? restored
           ? "Diagnostic complete — fault cleared"
-          : "Diagnostic complete — service recommended"
+          : requested
+            ? "Diagnostic complete — service requested"
+            : "Diagnostic complete — service recommended"
         : (incident ?? `${unit.name} needs attention`);
 
   // In the working states the incident line demotes to the subhead.
@@ -438,12 +478,28 @@ export function IncidentBanner({ className, unitId, ...props }: IncidentBannerPr
               Run diagnostic again
             </RunDiagnosticButton>
           ) : complete ? null : (
-            <RunDiagnosticButton
-              unitId={unitId}
-              size="lg"
-              variant="primary"
-              className="max-[30rem]:w-full"
-            />
+            <div className="flex flex-wrap items-center gap-3 max-[30rem]:w-full">
+              {/* Offered only while the newest alert is nobody's yet. Once it
+                  is taken the eyebrow above says so, and the pill is the only
+                  thing left to press — which is the order of the work. */}
+              {latest && !acked ? (
+                <ConsoleButton
+                  size="lg"
+                  variant="secondary"
+                  className="max-[30rem]:w-full"
+                  aria-label={`Acknowledge alert on ${unitId}`}
+                  onClick={acknowledgeUnit}
+                >
+                  Acknowledge
+                </ConsoleButton>
+              ) : null}
+              <RunDiagnosticButton
+                unitId={unitId}
+                size="lg"
+                variant="primary"
+                className="max-[30rem]:w-full"
+              />
+            </div>
           )}
         </div>
 

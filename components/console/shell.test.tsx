@@ -202,7 +202,9 @@ describe("ProductMark", () => {
   it("is typographic only — no image, no borrowed logo", () => {
     const { container } = render(<ProductMark />);
     expect(container.querySelector("img, svg")).toBeNull();
-    expect(screen.getByRole("link")).toHaveAccessibleName("Fleet Console");
+    // The subject is in the mark: "Fleet Console" alone could be trucks or
+    // servers, and the masthead is where a stranger learns what this is.
+    expect(screen.getByRole("link")).toHaveAccessibleName("Robot Fleet Console");
   });
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { acknowledgedTime } from "@/components/machine/safe-sit-copy";
+import { acknowledgedTime } from "@/lib/diagnostics/safe-sit-copy";
 import { type AuditEntry, type IncidentRecord } from "@/lib/stores";
 import { SectionLabel } from "@/components/console";
 import { clockTime } from "../alert-lifecycle";

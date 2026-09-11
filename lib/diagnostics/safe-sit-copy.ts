@@ -73,6 +73,28 @@ export interface SplitRecommendations {
 }
 
 /**
+ * Rank within EXECUTE: the ladder's own order, not the report's.
+ *
+ * SAFE SIT leads because it is the *precondition* for the rung above it — a
+ * recalibration needs the unit seated, and the only control here that seats it
+ * is this one. A report that happens to list RECALIBRATE first therefore puts
+ * the gated action at the top of the group and the action that ungates it
+ * underneath, which reads as a console recommending something it has itself
+ * disabled.
+ *
+ * This is the one place the report's order is overridden, and it is overridden
+ * by a fact about the robot rather than by a preference about layout: you
+ * cannot recalibrate a joint the machine is standing on. Everything else keeps
+ * the wire's order, and the ranking is by identity — never by position — for
+ * the same reason the split itself is.
+ */
+const EXECUTE_RANK = (action: string): number => {
+  if (norm(action) === norm(EXECUTED_RECOMMENDATION)) return 0;
+  if (norm(action) === norm(RECALIBRATE_RECOMMENDATION)) return 1;
+  return 2;
+};
+
+/**
  * The whole point of, in four lines: some of these buttons command a
  * robot and the rest write a note, and the card once presented all of them as
  * the same kind of object under one caveat that was true of all of them. The
@@ -80,7 +102,8 @@ export interface SplitRecommendations {
  * with what pressing the thing does.
  *
  * Two execute as of ("Command safe sit", "Recalibrate joint"), which
- * is why `execute` was an array from the start.
+ * is why `execute` was an array from the start. They come back in the order
+ * they can actually be performed (see `EXECUTE_RANK`); RECORD keeps the wire's.
  */
 export function splitRecommendations(
   recommendations: readonly string[],
@@ -90,6 +113,8 @@ export function splitRecommendations(
   for (const action of recommendations) {
     (isExecutedRecommendation(action) ? execute : record).push(action);
   }
+  // Stable: equal ranks keep the report's order.
+  execute.sort((a, b) => EXECUTE_RANK(a) - EXECUTE_RANK(b));
   return { execute, record };
 }
 

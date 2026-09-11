@@ -139,14 +139,31 @@ export function ScanColumns({ className, inert, children }: ScanColumnsProps) {
       return raw && Number.isFinite(px) ? px : null;
     };
 
-    const syncAria = (edge: ScanEdge) => {
+    /**
+     * What a gesture already knows, so that a frame does not have to ask again.
+     *
+     * `apply` writes a custom property and then describes the result to a
+     * screen reader, and describing it used to mean three `getBoundingClientRect`
+     * reads — after the write, in the same frame, which is a forced synchronous
+     * layout of the whole board sixty times a second for as long as a divider is
+     * moving. Nothing in those reads is news mid-gesture: the grid is not
+     * resizing, the other column is not moving, and the width being reported is
+     * the number just written. A drag measures once, at pointerdown, and hands
+     * it down. Whoever has nothing to hand down still measures, which is the
+     * right cost for the once-per-gesture cases (a restore, a settle, a
+     * viewport change).
+     */
+    const syncAria = (
+      edge: ScanEdge,
+      known?: { ctx: ClampContext; other: number; now: number },
+    ) => {
       const handle = handles.current[edge];
       if (!handle) return;
-      const ctx = context();
-      const other = widthOf(OTHER[edge]);
+      const ctx = known?.ctx ?? context();
+      const other = known?.other ?? widthOf(OTHER[edge]);
       const min = Math.round(minColumnPx(edge, ctx));
       const max = Math.round(Math.max(min, maxColumnPx(edge, other, ctx)));
-      const now = Math.round(widthOf(edge));
+      const now = Math.round(known?.now ?? widthOf(edge));
       handle.setAttribute("aria-valuemin", String(min));
       handle.setAttribute("aria-valuemax", String(max));
       handle.setAttribute("aria-valuenow", String(now));
@@ -155,9 +172,13 @@ export function ScanColumns({ className, inert, children }: ScanColumnsProps) {
       handle.setAttribute("aria-valuetext", `${now} pixels`);
     };
 
-    const apply = (edge: ScanEdge, px: number) => {
+    const apply = (
+      edge: ScanEdge,
+      px: number,
+      known?: { ctx: ClampContext; other: number },
+    ) => {
       grid.style.setProperty(EDGE_VAR[edge], `${px}px`);
-      syncAria(edge);
+      syncAria(edge, known && { ...known, now: px });
     };
 
     const persist = () => {
@@ -276,6 +297,11 @@ export function ScanColumns({ className, inert, children }: ScanColumnsProps) {
       }
       grid.style.setProperty(EDGE_VAR[edge], `${from}px`);
 
+      // Same bargain the drag makes: neither the grid nor the far column moves
+      // while this one springs home, so the travel reads them once.
+      const ctx = context();
+      const other = widthOf(OTHER[edge]);
+
       const spec = { from, to, velocity: 0, response: RESET_RESPONSE_S };
       // The spring's clock is the frame loop's, not the wall clock's: the
       // `performance.now()` of this handler and the timestamp the first rAF
@@ -299,7 +325,7 @@ export function ScanColumns({ className, inert, children }: ScanColumnsProps) {
           persist();
           return;
         }
-        apply(edge, Math.round(sample.value));
+        apply(edge, Math.round(sample.value), { ctx, other });
       });
       resets[edge] = stop;
     };
@@ -340,7 +366,7 @@ export function ScanColumns({ className, inert, children }: ScanColumnsProps) {
           // the pointer's, mirrored.
           const travel = latestX - startX;
           const delta = edge === "log" ? travel : -travel;
-          apply(edge, clampColumn(edge, startPx + delta, other, ctx));
+          apply(edge, clampColumn(edge, startPx + delta, other, ctx), { ctx, other });
         };
 
         const onMove = (ev: PointerEvent) => {

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { useMachineView } from "./diagnostic-view";
 
 /**
  * The verdict sheet under `prefers-reduced-motion`, on the phone — the one
@@ -25,6 +26,12 @@ import { expect, test } from "@playwright/test";
  */
 
 const IDENTITY = ["none", "matrix(1, 0, 0, 1, 0, 0)"];
+
+/* This walks the dark diagnostic, which is opt-in: the console now opens a
+   scan in the calm operator-space panel by default. */
+test.beforeEach(async ({ page }) => {
+  await useMachineView(page);
+});
 
 test("phone RM: sheet crossfades, tracks 1:1, and parks on the release frame", async ({
   page,

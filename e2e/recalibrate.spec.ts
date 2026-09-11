@@ -1,4 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
+import { useMachineView } from "./diagnostic-view";
 
 /**
  * The rendered colour of a token, resolved in the same element's context.
@@ -36,6 +37,12 @@ async function tokenColor(el: Locator, token: string): Promise<string> {
  * Everything is asserted by observed state — the gate's own label, the wire's
  * own words, the numbers under the trace — never by sleeping to a beat.
  */
+/* These walk the dark diagnostic, which is opt-in: the console now opens a
+   scan in the calm operator-space panel by default. */
+test.beforeEach(async ({ page }) => {
+  await useMachineView(page);
+});
+
 test("verdict → safe sit → recalibrate → partial result on the evidence", async ({
   page,
 }) => {

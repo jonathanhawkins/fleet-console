@@ -495,7 +495,7 @@ describe("TelemetryStrip", () => {
   });
 
   /**
-   * The arrival beat (D1), and why it is asserted as node identity.
+   * The arrival beat, and why it is asserted as node identity.
    *
    * The em-dash and the first reading are the same `<span>`, which is the only
    * reason a CSS transition can carry one into the other. Split them into two

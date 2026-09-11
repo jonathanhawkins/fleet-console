@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { useMachineView } from "./diagnostic-view";
 
 /**
  * The golden path under `prefers-reduced-motion: reduce`.
@@ -52,6 +53,12 @@ function markerCenters(page: Page) {
     return { n07: centre("N-07"), n01: centre("N-01") };
   });
 }
+
+/* These walk the dark diagnostic, which is opt-in: the console now opens a
+   scan in the calm operator-space panel by default. */
+test.beforeEach(async ({ page }) => {
+  await useMachineView(page);
+});
 
 test("fleet: the alert beat lands the camera with zero travel frames", async ({
   page,

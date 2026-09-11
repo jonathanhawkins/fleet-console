@@ -1,4 +1,5 @@
 import { expect, test, type Locator } from "@playwright/test";
+import { useMachineView } from "./diagnostic-view";
 
 /**
  * the descent is leaveable, and coming back lands on the scan as it
@@ -29,6 +30,12 @@ async function nodeCount(overlay: Locator): Promise<number> {
   const meta = await overlay.getByText(/\d+ NODES/).innerText();
   return Number.parseInt(meta, 10);
 }
+
+/* These walk the dark diagnostic, which is opt-in: the console now opens a
+   scan in the calm operator-space panel by default. */
+test.beforeEach(async ({ page }) => {
+  await useMachineView(page);
+});
 
 test("close mid-scan → in-progress banner → view scan → the board is still there", async ({
   page,

@@ -194,11 +194,24 @@ export function incidentTimes(
       .filter((e) => raised === undefined || e.ts >= raised)
       .map((e) => e.ts),
   );
-  // The *last* scan start before the verdict, because an aborted scan earlier
-  // in the session leaves its own entry and this verdict came from the last one.
-  const diagnostic = max(
-    unitLog.filter((e) => e.kind === "diag-start" && e.ts <= verdict).map((e) => e.ts),
-  );
+  /**
+   * The *last* scan start before the verdict, because an aborted scan earlier
+   * in the session leaves its own entry and this verdict came from the last one.
+   *
+   * Falling back to the record's own `startedAt` is not a guess. The audit log
+   * is a journal of the session and a storyline replay clears it, but the
+   * moment this console opened the diagnostic travels *with the incident* —
+   * which is what it is stored on the record for. Without the fallback a report
+   * read after a replay says it does not know when its own scan began, while
+   * holding the answer, and every span measured from it goes blank with it.
+   */
+  const diagnostic =
+    max(
+      unitLog.filter((e) => e.kind === "diag-start" && e.ts <= verdict).map((e) => e.ts),
+    ) ??
+    (record.startedAt !== undefined && record.startedAt <= verdict
+      ? record.startedAt
+      : undefined);
 
   return { raised, escalated, acked, diagnostic, verdict, resolved };
 }

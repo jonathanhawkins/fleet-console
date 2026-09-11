@@ -55,6 +55,7 @@ const E2E_BUILD_ENV = [
   "NEXT_PUBLIC_TRANSPORT=worker",
   "NEXT_PUBLIC_SIM_SEED=7",
   "NEXT_PUBLIC_SIM_PREROLL_MS=0",
+  "NEXT_PUBLIC_SIM_CHAIN=0",
   "NEXT_PUBLIC_SIM_ONSET_MS=6000",
   "NEXT_PUBLIC_SIM_AMBER_MS=9000",
   "NEXT_PUBLIC_SIM_RED_MS=12000",
@@ -92,6 +93,7 @@ const E2E_COHORT_ENV = [
   "NEXT_PUBLIC_TRANSPORT=worker",
   "NEXT_PUBLIC_SIM_SEED=7",
   "NEXT_PUBLIC_SIM_PREROLL_MS=0",
+  "NEXT_PUBLIC_SIM_CHAIN=0",
   `NEXT_PUBLIC_SIM_ONSET_MS=${PARKED}`,
   `NEXT_PUBLIC_SIM_AMBER_MS=${PARKED + 10_000}`,
   `NEXT_PUBLIC_SIM_RED_MS=${PARKED + 20_000}`,
@@ -117,7 +119,10 @@ export default defineConfig({
   projects: [
     {
       /**
-       * The desk lane. The golden path (the walk that IS the product), the
+       * The desk lane. The golden path (the walk that IS the product — the
+       * incident taken through the calm operator-space panel the console opens
+       * by default) and machine-view beside it, which is the same incident
+       * through the descent an operator can opt into,
        * leave-and-return loop it does not cover — an operator stepping out of
        * a running scan and coming back to it — the recalibration branch it
        * deliberately does not take, which is the maneuver that earns the
@@ -132,7 +137,7 @@ export default defineConfig({
        */
       name: "chromium",
       testMatch:
-        /(golden-path|leave-return|recalibrate|map-degraded|error-states|accessibility|responsive)\.spec\.ts/,
+        /(golden-path|machine-view|leave-return|recalibrate|map-degraded|error-states|accessibility|responsive)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         // Override the device preset's 720p: tall enough that all eight rail

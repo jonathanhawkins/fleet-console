@@ -4,7 +4,11 @@ import * as React from "react";
 import { commandSafeSit } from "@/components/fleet/telemetry-command";
 import { useFleetStore } from "@/lib/stores";
 import { ExecuteAction, type ManeuverSpec } from "./execute-action";
-import { SIT_GATE_NOTE, SIT_GATE_SUFFIX, SIT_IMPACT } from "./safe-sit-copy";
+import {
+  SIT_GATE_NOTE,
+  SIT_GATE_SUFFIX,
+  SIT_IMPACT,
+} from "@/lib/diagnostics/safe-sit-copy";
 
 /**
  * SAFE SIT: the first control in this console that moved a robot.

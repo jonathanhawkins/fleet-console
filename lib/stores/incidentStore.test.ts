@@ -292,6 +292,10 @@ describe("incident store — leaving and re-entering a live session", () => {
   it("keeps the session, its identity and its events across a leave", () => {
     const store = useIncidentStore;
     store.getState().beginDescent("N-07");
+    // A scan opens calm: the operator is on the unit page watching the panel,
+    // not in machine space. Entering it is the deliberate act this test leaves.
+    expect(store.getState().watching).toBe(false);
+    store.getState().watchSession();
     expect(store.getState().watching).toBe(true);
     store.getState().applyDiagEvent(ev({ k: "scan_start" }));
     store.getState().applyDiagEvent(ev({ k: "walk", path: "/sys/core/heartbeat.svc" }));
@@ -354,11 +358,14 @@ describe("incident store — leaving and re-entering a live session", () => {
     expect(store.getState().session).toBeNull();
   });
 
-  it("puts an adopted scan on screen — a mid-scan reload is watching by definition", () => {
+  it("adopts a scan without putting the operator in machine space", () => {
     const store = useIncidentStore;
     store.getState().applyDiagEvent(ev({ k: "scan_start" }));
     expect(store.getState().phase).toBe("scanning");
-    expect(store.getState().watching).toBe(true);
+    // The scan is real and the console renders it — calmly. Arriving mid-scan
+    // is not consent to be dropped into machine space, so a refresh lands on
+    // the panel with the scan already running in it.
+    expect(store.getState().watching).toBe(false);
   });
 });
 
@@ -377,6 +384,10 @@ describe("incident store — the departing session", () => {
   const toVerdict = () => {
     const store = useIncidentStore;
     store.getState().beginDescent("N-07");
+    // `exiting` exists for a surface that has to animate its way out, which is
+    // machine space. A calm panel leaves nothing behind, so every test here
+    // first puts the operator where there is something to depart from.
+    store.getState().watchSession();
     store.getState().applyDiagEvent(ev({ k: "scan_start" }));
     store.getState().applyDiagEvent(ev({ k: "walk", path: "/sys/core/heartbeat.svc" }));
     store.getState().applyDiagEvent(ev(flag));
@@ -430,6 +441,7 @@ describe("incident store — the departing session", () => {
   it("snapshots an abort too, in the phase it aborted from", () => {
     const store = useIncidentStore;
     store.getState().beginDescent("N-07");
+    store.getState().watchSession();
     store.getState().applyDiagEvent(ev({ k: "scan_start" }));
     const live = store.getState().session!;
 
@@ -505,6 +517,7 @@ describe("incident store — the departing session", () => {
     const strand = () => {
       const store = useIncidentStore;
       store.getState().beginDescent("N-07");
+      store.getState().watchSession();
       store.getState().applyDiagEvent(ev({ k: "scan_start" }));
       store.getState().abortSession();
       expect(store.getState().exiting).not.toBeNull();

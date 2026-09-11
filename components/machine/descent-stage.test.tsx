@@ -17,7 +17,7 @@ import {
 } from "@/lib/schema";
 import { selectShownSession, useFleetStore, useIncidentStore } from "@/lib/stores";
 import { type TelemetryTransport } from "@/lib/transport";
-import { EXECUTED_RECOMMENDATION } from "./safe-sit-copy";
+import { EXECUTED_RECOMMENDATION } from "@/lib/diagnostics/safe-sit-copy";
 import { useScanLink } from "./scan-state";
 import type * as ScanLogLines from "./scan-log-lines";
 
@@ -121,6 +121,19 @@ const ev = (e: DiagEvent, unitId = "N-07"): DiagEventMessage => ({
 /** Store writes reach React, so they are state updates and belong in act(). */
 const dispatch = (fn: () => void) => act(() => fn());
 
+/**
+ * Start a scan and step into machine space.
+ *
+ * A scan now opens on the calm operator-space panel; the descent is a door the
+ * operator opens from it. Every test in this file is about what is behind that
+ * door, so each one opens it explicitly rather than being posted through.
+ */
+const startScanInMachineSpace = (unitId = "N-07") => {
+  const store = useIncidentStore.getState();
+  store.applyDiagEvent(ev({ k: "scan_start" }, unitId));
+  useIncidentStore.getState().watchSession();
+};
+
 const overlay = () => document.querySelector<HTMLElement>("[data-descent-layer]");
 
 /** The element the exit animates — the layer's only child. */
@@ -222,7 +235,7 @@ async function acrossFrames(assertion: () => void, frames = 240): Promise<void> 
 /** A settled surface showing a finished scan, with the verdict card on it. */
 async function toVerdict(): Promise<void> {
   render(<DescentOverlay unitId="N-07" />);
-  dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+  dispatch(() => startScanInMachineSpace());
   await waitFor(() => expect(overlay()).not.toBeNull());
   dispatch(() => {
     const store = useIncidentStore.getState();
@@ -348,7 +361,7 @@ describe("DescentStage — the link the surface is showing", () => {
         <DescentOverlay unitId="N-07" />
       </>,
     );
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     await waitFor(() => expect(overlay()).not.toBeNull());
 
     // The drop and the restore, both before the first walk line lands.
@@ -409,7 +422,7 @@ describe("DescentStage — the link the surface is showing", () => {
         <DescentOverlay unitId="N-07" />
       </>,
     );
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     await waitFor(() => expect(overlay()).not.toBeNull());
     dispatch(() => useFleetStore.setState({ connection: "reconnecting" }));
     await acrossFrames(() => expect(liveLink()).toBe("lost"));
@@ -679,7 +692,7 @@ describe("DescentStage — the departing snapshot", () => {
     const bannerText = () => (banner()?.textContent ?? "").replace(/\s+/g, " ");
     const runControls = () => screen.queryAllByRole("button", { name: /Run diagnostic/ });
 
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     await waitFor(() => expect(overlay()).not.toBeNull());
 
     // Positive control: while the scan is live the page underneath says so, and
@@ -732,7 +745,7 @@ describe("DescentStage — the departing snapshot", () => {
    */
   it("collects the snapshot when the stage is torn down mid-exit", async () => {
     const view = render(<DescentOverlay unitId="N-07" />);
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     await waitFor(() => expect(overlay()).not.toBeNull());
     dispatch(() =>
       useIncidentStore.getState().applyDiagEvent(ev({ k: "verdict", report: REPORT })),
@@ -767,7 +780,7 @@ describe("DescentStage — the departing snapshot", () => {
    */
   it("renders a live session through a leave, and snapshots nothing", async () => {
     render(<DescentOverlay unitId="N-07" />);
-    dispatch(() => useIncidentStore.getState().applyDiagEvent(ev({ k: "scan_start" })));
+    dispatch(() => startScanInMachineSpace());
     await waitFor(() => expect(overlay()).not.toBeNull());
     dispatch(() =>
       useIncidentStore.getState().applyDiagEvent(ev({ k: "walk", path: "/sys/core/a" })),

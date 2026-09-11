@@ -1,4 +1,4 @@
-import { type ResidualReading } from "@/components/machine/recalibrate-copy";
+import { type ResidualReading } from "@/lib/diagnostics/recalibrate-copy";
 
 /**
  * ## The verdict is a hypothesis

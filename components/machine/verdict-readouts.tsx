@@ -11,7 +11,7 @@ import {
   residualReading,
   SCAN_TENSE_LABEL,
   type CalibrationOutcome,
-} from "./recalibrate-copy";
+} from "@/lib/diagnostics/recalibrate-copy";
 import { anomalyDifferential } from "./scan-copy";
 
 /**

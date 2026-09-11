@@ -1,7 +1,7 @@
 "use client";
 
 import { tracePoints } from "@/components/machine/evidence-trace";
-import { channelTone, gainRatio, rmsDelta } from "@/components/machine/waveform-math";
+import { channelTone, gainRatio, rmsDelta } from "@/lib/diagnostics/waveform-math";
 import { type DiagChannel, type IncidentRecord } from "@/lib/stores";
 import { cn } from "@/lib/utils";
 import { jointLabel, SectionLabel } from "@/components/console";

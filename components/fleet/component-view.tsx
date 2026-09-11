@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { preload } from "react-dom";
 import dynamic from "next/dynamic";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -14,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ComponentElevation } from "./component-elevation";
 import {
+  CHASSIS_MODEL_URL,
   COMPONENT_ORDER,
   componentHighlight,
   componentLabel,
@@ -61,6 +63,24 @@ const selectSessionVerdictJoint = (s: IncidentState): string | null =>
 
 /** Start fetching the chunk and the model a screenful before they are wanted. */
 const PREMOUNT_MARGIN = "600px 0px";
+
+/**
+ * The model, fetched beside the chunk rather than behind it.
+ *
+ * `useGLTF.preload` lives in component-chassis.ts, which imports three — so it
+ * is on the far side of the dynamic boundary and cannot run until the scene
+ * chunk has downloaded *and* evaluated. That put a 200 KB body behind a
+ * 250 KB gz one, in series, for no reason: the URL is a plain string that this
+ * side of the gate already knows.
+ *
+ * `crossOrigin` for the same reason the fleet map's style preload carries it —
+ * three's loader reads with XHR at `withCredentials: false`, so only a
+ * credentials-mode match lets the preload satisfy that read instead of racing
+ * a second copy of it.
+ */
+function warmChassisModel(): void {
+  preload(CHASSIS_MODEL_URL, { as: "fetch", crossOrigin: "anonymous" });
+}
 
 export interface ComponentViewProps {
   unitId: string;
@@ -325,6 +345,7 @@ export function useViewportGate(ref: React.RefObject<HTMLElement | null>): {
     if (!el) return;
     if (typeof IntersectionObserver !== "function") {
       // No observer (jsdom, very old browsers): mount rather than withhold.
+      warmChassisModel();
       setMounted(true);
       setIntersecting(true);
       return;
@@ -332,7 +353,9 @@ export function useViewportGate(ref: React.RefObject<HTMLElement | null>): {
 
     const approaching = new IntersectionObserver(
       ([entry]) => {
-        if (entry?.isIntersecting) setMounted(true);
+        if (!entry?.isIntersecting) return;
+        warmChassisModel();
+        setMounted(true);
       },
       { rootMargin: PREMOUNT_MARGIN },
     );

@@ -1,5 +1,5 @@
 import { type FleetMessage, type OperatorCommand } from "@/lib/schema";
-import { chapterSeekMs, type StorylineChapter } from "./chapters";
+import { chapterAdvanceMs, chapterSeekMs, type StorylineChapter } from "./chapters";
 import { storylineCrossings } from "./crossings";
 import { handleRunDiagnostic } from "./diagnostics";
 import { initUnits } from "./fleet";
@@ -103,6 +103,36 @@ function handleSeek(
   return [snapshot(st), ...storylineCrossings(cfg, st, 0, targetMs)];
 }
 
+/**
+ * ADVANCE_STORYLINE: bring a chapter forward to now, keeping the fleet as it is.
+ *
+ * Not a reset. The point of an advance is that the operator has just finished
+ * with something — filed the knee incident, say — and what they did stays
+ * done: the seated robot stays seated, the recalibrated joint stays
+ * recalibrated, the alerts they resolved stay resolved. Only the clock moves,
+ * and it moves the way a long gap does in `advance()`: every beat in the
+ * skipped span fires exactly once, so the fleet carries the history a run to
+ * that point would have written (N-03's route blocked and recovered, if that
+ * lay between), and the chapter's own first beat is still a few seconds out.
+ *
+ * A no-op when the chapter is already at hand or behind, so filing a second
+ * incident cannot pull the story anywhere twice. In-flight maneuvers measured
+ * on the storyline clock complete with the jump, which is the right answer
+ * for a maneuver the operator has already walked away from.
+ */
+function handleAdvance(
+  cfg: EngineConfig,
+  st: EngineState,
+  chapter: StorylineChapter,
+): FleetMessage[] {
+  const nowMs = nowTotalMs(cfg, st);
+  const currentMs = nowMs - st.storylineStartMs;
+  const targetMs = chapterAdvanceMs(cfg, chapter);
+  if (targetMs <= currentMs) return [];
+  st.storylineStartMs = nowMs - targetMs;
+  return storylineCrossings(cfg, st, currentMs, targetMs);
+}
+
 /** Apply an operator command; returns messages to broadcast. */
 export function handleCommand(
   cfg: EngineConfig,
@@ -114,6 +144,8 @@ export function handleCommand(
       return handleReset(cfg, st);
     case "SEEK_STORYLINE":
       return handleSeek(cfg, st, cmd.chapter);
+    case "ADVANCE_STORYLINE":
+      return handleAdvance(cfg, st, cmd.chapter);
     case "COMMAND_SAFE_SIT":
       return handleSafeSit(cfg, st, cmd);
     case "RECALIBRATE_JOINT":

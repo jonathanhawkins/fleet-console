@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as console_ from "@/components/console";
 import { SPECIMENS } from "./specimens";
 import SystemPage from "./page";
@@ -34,6 +34,28 @@ function exportedComponents(): string[] {
     .map(([name]) => name)
     .sort();
 }
+
+/**
+ * The gallery renders the diagnostic's own canvas regions, and jsdom has
+ * neither a 2d backend nor a ResizeObserver. Neither is what this file is
+ * about — it asserts the document's outline and its coverage of the barrel.
+ */
+beforeEach(() => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("the design-system gallery", () => {
   it("documents every component the console barrel exports", () => {
@@ -70,10 +92,14 @@ describe("the design-system gallery", () => {
     );
   });
 
-  it("draws each specimen in both spaces from the same element", () => {
+  it("draws each specimen in both spaces from the same element", async () => {
     const { container } = render(<SystemPage />);
-    const frames = container.querySelectorAll("[data-space='machine']");
-    // One per specimen, plus the machine-space section itself.
-    expect(frames.length).toBeGreaterThanOrEqual(SPECIMENS.length);
+    // Awaited because the catalogue is fetched rather than shipped
+    // (specimen-library.tsx); the frames appear when its chunk resolves.
+    await waitFor(() => {
+      const frames = container.querySelectorAll("[data-space='machine']");
+      // One per specimen, plus the machine-space section itself.
+      expect(frames.length).toBeGreaterThanOrEqual(SPECIMENS.length);
+    });
   });
 });

@@ -6,7 +6,7 @@ import {
   type DiagEventMessage,
   type FleetMessage,
 } from "@/lib/schema";
-import { channelTone, gainRatio, rmsDelta } from "@/components/machine/waveform-math";
+import { channelTone, gainRatio, rmsDelta } from "@/lib/diagnostics/waveform-math";
 import {
   createSimEngine,
   DEFAULT_DIAG_TIMELINE,

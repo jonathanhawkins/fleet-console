@@ -36,6 +36,9 @@ export { BatteryMeter } from "./battery-meter";
 
 export { Disclosure } from "./disclosure";
 
+export { ProgressRule } from "./progress-rule";
+export type { ProgressRuleProps } from "./progress-rule";
+
 export { RegionNote } from "./region-note";
 
 export { PostureTag } from "./posture-tag";
@@ -95,6 +98,8 @@ export {
   setDescentOccluded,
   subscribeDescentOcclusion,
 } from "./descent-occlusion";
+
+export { warmMachineFont } from "./space-font";
 
 export { REPORT_ATTR, usePageLock } from "./report-page-lock";
 

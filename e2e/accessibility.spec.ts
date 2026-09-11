@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { useCalmView, useMachineView } from "./diagnostic-view";
 
 /**
  * Accessibility, where Lighthouse cannot reach.
@@ -89,6 +90,12 @@ const attentionRow = (page: Page) =>
   page
     .getByRole("link", { name: /N-07, Elm House\. (Attention|Alert)\./ })
     .and(page.locator('[data-slot="unit-card"]'));
+
+/* These walk the dark diagnostic, which is opt-in: the console now opens a
+   scan in the calm operator-space panel by default. */
+test.beforeEach(async ({ page }) => {
+  await useMachineView(page);
+});
 
 /**
  * The golden path, in the steps the axe walks below share.
@@ -251,4 +258,50 @@ test("the golden path is drivable from the keyboard alone", async ({ page }) => 
   await page.keyboard.press("Escape");
   await expect(overlay).toBeHidden({ timeout: 10_000 });
   await expect(page.getByRole("heading", { name: "Incident history" })).toBeVisible();
+});
+
+/**
+ * The default surface, which the two walks above deliberately do not open.
+ *
+ * They pin machine view because they are about the descent; that leaves the
+ * panel every operator actually gets with no axe pass at all, which is the
+ * wrong surface to have uncovered. This is that pass: same fault, same
+ * verdict, in the console's own daylight.
+ */
+test("no axe violations on the calm diagnostic, scanning and at its verdict", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await useCalmView(page);
+
+  await page.goto("/");
+  const railRow = page
+    .getByRole("link", { name: /N-07, Elm House\. (Attention|Alert)\./ })
+    .and(page.locator('[data-slot="unit-card"]'));
+  await expect(railRow).toBeVisible({ timeout: 20_000 });
+  await railRow.click();
+
+  const banner = page.locator('[data-slot="incident-banner"]');
+  await banner.getByRole("button", { name: "Run diagnostic" }).click();
+
+  const panel = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Diagnostic" }) });
+  await expect(panel).toBeVisible({ timeout: 10_000 });
+  await expect(panel.locator("[data-channel]")).toHaveCount(6);
+  await expectNoViolations(page, "diagnostic panel, mid-scan");
+
+  await expect(panel.getByRole("heading", { name: /Actuator A-07/ })).toBeVisible({
+    timeout: 40_000,
+  });
+  await expectNoViolations(page, "diagnostic panel, at the verdict");
+
+  // The confirmation is the one surface here that traps focus.
+  const sit = panel.locator("li").filter({ hasText: "Command safe sit" });
+  const command = sit.getByRole("button", { name: "Command" });
+  if (await command.isEnabled()) {
+    await command.click();
+    await expect(panel.getByRole("alertdialog")).toBeVisible();
+    await expectNoViolations(page, "diagnostic panel, confirmation open");
+  }
 });

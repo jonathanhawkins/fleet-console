@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { useBoot } from "./boot-variants";
 import { EvidenceTrace } from "./evidence-trace";
 import { MachineControl } from "./machine-control";
-import { isRestored } from "./recalibrate-copy";
+import { isRestored } from "@/lib/diagnostics/recalibrate-copy";
 import {
   machineComponent,
   machineJoint,

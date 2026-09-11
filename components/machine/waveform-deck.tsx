@@ -6,7 +6,11 @@ import { type DiagChannel } from "@/lib/stores";
 import { readToken, TOKEN_FALLBACK } from "@/lib/tokens/fallback";
 import { machineJoint, pad2 } from "./scan-copy";
 import { useDiagSession } from "./scan-state";
-import { TONE_BY_INDEX, writeSampleTones, type ChannelTone } from "./waveform-math";
+import {
+  TONE_BY_INDEX,
+  writeSampleTones,
+  type ChannelTone,
+} from "@/lib/diagnostics/waveform-math";
 
 /**
  * Six channels, live against their factory reference.

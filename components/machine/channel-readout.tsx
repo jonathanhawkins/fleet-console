@@ -5,7 +5,12 @@ import { JOINTS } from "@/components/console";
 import { type DiagChannel } from "@/lib/stores";
 import { cn } from "@/lib/utils";
 import { machineJoint, pad2 } from "./scan-copy";
-import { channelTone, gainRatio, rmsDelta, type ChannelTone } from "./waveform-math";
+import {
+  channelTone,
+  gainRatio,
+  rmsDelta,
+  type ChannelTone,
+} from "@/lib/diagnostics/waveform-math";
 
 /**
  * The numbers under the traces.

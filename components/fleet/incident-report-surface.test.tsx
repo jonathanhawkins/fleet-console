@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   markAcknowledged,
   resetAcknowledgedTimes,
-} from "@/components/machine/safe-sit-copy";
+} from "@/lib/diagnostics/safe-sit-copy";
 import { type VerdictReport } from "@/lib/schema";
 import {
   useAuditStore,

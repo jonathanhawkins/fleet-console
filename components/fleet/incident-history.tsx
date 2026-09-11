@@ -11,6 +11,7 @@ import {
   type IncidentRecord,
 } from "@/lib/stores";
 import { cn } from "@/lib/utils";
+import { incidentRef } from "./incident-ref";
 import { clockTime, formatDuration } from "./alert-lifecycle";
 import { verdictLine } from "./incident-banner";
 import { incidentSpans, incidentTimes, openIncidentReport } from "./incident-report";
@@ -64,19 +65,6 @@ import { isoTime, SectionLabel } from "@/components/console";
  * So the row lands still and solid. The right beat for this arrival already
  * exists and belongs to the ascent.
  */
-
-/**
- * A reference an operator could read aloud.
- *
- * The store's record id is `inc-N-07-1787356771820` — correct as a key, and
- * thirteen digits of epoch noise on a warm-white page whose whole discipline is
- * that everything on it is legible. This derives a short reference from the
- * same two facts (which unit, which moment), so it is exactly as stable and
- * exactly as unique, and it fits in a sentence.
- */
-export function incidentRef(unitId: string, ts: number): string {
-  return `INC-${unitId.replace("-", "")}-${ts.toString(36).toUpperCase()}`;
-}
 
 export interface IncidentHistoryProps extends Omit<
   React.ComponentPropsWithoutRef<"div">,
@@ -194,9 +182,4 @@ function IncidentResolutionSpan({ record }: { record: IncidentRecord }) {
       <span className="tnum text-small text-ink-soft">{formatDuration(mttr)}</span>
     </span>
   );
-}
-
-/** Does this unit have anything to show? Lets the page skip the whole card. */
-export function useHasIncidentHistory(unitId: string): boolean {
-  return useIncidentStore((s) => s.history.some((r) => r.unitId === unitId));
 }

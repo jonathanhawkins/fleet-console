@@ -7,15 +7,20 @@ import {
   SectionLabel,
   StatusChip,
 } from "@/components/console";
+import { routeAddress } from "@/lib/metadata";
 import { FLEET_UNITS } from "@/sim/engine";
-import { SpecimenEntry } from "./library";
-import { SPECIMENS } from "./specimens";
+import { DiagnosticSpecimen } from "./diagnostic-specimen";
+import { SpecimenLibrary } from "./specimen-library";
 import { TokenSwatch, TypeSpecimen } from "./token-readout";
+
+const SYSTEM_DESCRIPTION =
+  "The Robot Fleet Console component library, rendered in both spaces from the " +
+  "same elements: calm operator space and the opt-in machine diagnostic board.";
 
 export const metadata: Metadata = {
   title: "Design system",
-  description:
-    "The Fleet Console component library rendered in both spaces: operator and machine.",
+  description: SYSTEM_DESCRIPTION,
+  ...routeAddress("/system"),
 };
 
 /* -------------------------------------------------------------------------- */
@@ -77,16 +82,85 @@ function Group({
  * Both worlds open the same way — label, headline, one paragraph, three facts —
  * so that the differences a reader notices are only the ones the tokens make.
  */
+
+/**
+ * A scan, frozen, so the gallery can show the diagnostic rather than describe it.
+ *
+ * The real `ChannelColumn` and `StructureList`, fed a synthetic session: five
+ * joints tracking their reference and one that does not, and a walk far enough
+ * through to have most of the structure cleared. Nothing here is a mock-up of
+ * those components — they are the components, and if their design changes this
+ * page changes with it.
+ */
+/**
+ * Amplitudes are the simulator's, not round numbers, so the readings this page
+ * prints are the readings the product prints: healthy joints a shade over
+ * 0.01 RMS, and a knee at 1.76x its envelope reading about 0.18. A gallery
+ * whose figures do not match the thing it documents is a gallery a reader
+ * stops trusting halfway down.
+ */
+const ENVELOPE = 0.34;
+/** Enough deviation to read as a real measurement, far under RMS_HEALTHY. */
+const NOISE = 0.02;
+
+/**
+ * Four decimals, because these samples cross into a client component and every
+ * digit past the fourth is RSC payload nothing can render: the canvas draws
+ * them at one device pixel per sample, and the readouts beside it show two or
+ * three decimals. Unrounded float64 spent several KB of this page's flight
+ * data writing sixteen.
+ */
+const round = (v: number) => Math.round(v * 1e4) / 1e4;
+
+const cycle = (gain: number, phase = 0) =>
+  Array.from({ length: 120 }, (_, i) =>
+    round(Math.sin((i / 120) * Math.PI * 6 + phase) * ENVELOPE * gain),
+  );
+
+const measured = (gain: number, phase = 0) =>
+  cycle(gain, phase).map((v, i) => round(v + Math.sin(i * 1.7) * NOISE));
+
+const SPECIMEN_CHANNELS = [
+  { joint: "hip_L", wave: measured(1), ref: cycle(1) },
+  { joint: "hip_R", wave: measured(1, 0.2), ref: cycle(1, 0.2) },
+  // The one the scan flags: 1.76x its reference envelope.
+  { joint: "knee_L", wave: cycle(1.76, 0.4), ref: cycle(1, 0.4) },
+  { joint: "knee_R", wave: measured(1, 0.6), ref: cycle(1, 0.6) },
+  { joint: "ankle_L", wave: measured(1, 0.8), ref: cycle(1, 0.8) },
+  { joint: "ankle_R", wave: measured(1, 1), ref: cycle(1, 1) },
+];
+
+const SPECIMEN_SESSION = {
+  unitId: "N-07",
+  startedAt: 0,
+  walkLines: [
+    "/sys/core/heartbeat.svc",
+    "/sys/core/power_rail/v48_main",
+    "/sys/core/thermal/zone_map.cfg",
+    "/sys/actuator_bus/enumerate",
+    "/firmware/gait/park_pose.ko",
+    "/firmware/gait/walk_cycle.ko",
+  ],
+  channels: SPECIMEN_CHANNELS,
+  flag: null,
+  report: null,
+  acknowledged: [],
+  calibration: null,
+};
+
 function SpaceHeader({
   label,
   headline,
   blurb,
   meta,
+  note,
 }: {
   label: string;
   headline: string;
   blurb: string;
   meta: readonly string[];
+  /** How to see this space in the product, for a reader who wants to go look. */
+  note?: React.ReactNode;
 }) {
   return (
     <header className="grid gap-6 pb-14 md:grid-cols-[200px_1fr] md:gap-16 machine:pb-10">
@@ -106,6 +180,7 @@ function SpaceHeader({
             </Fragment>
           ))}
         </div>
+        {note ? <p className="max-w-[34rem] text-small text-ink-soft">{note}</p> : null}
       </div>
     </header>
   );
@@ -160,8 +235,15 @@ function OperatorSpace() {
         <SpaceHeader
           label="Operator space"
           headline="Calm enough to glance at, like a thermostat."
-          blurb="The default world. Warm white, generous whitespace, muted status colour, pill buttons. An operator watching eight healthy homes should feel nothing at all. No neon reaches this space."
+          blurb="The default world, and where the whole diagnostic now happens. Warm white, generous whitespace, muted status colour, pill buttons. An operator watching eight healthy homes should feel nothing at all. No neon reaches this space."
           meta={["Geist Sans", "Radius 12px", "Soft elevation"]}
+          note={
+            <>
+              The scan, its six live-versus-reference channels, the verdict and the
+              actions all render in these tokens, on the unit page, beside the telemetry
+              that prompted them.
+            </>
+          }
         />
 
         <Group
@@ -206,6 +288,17 @@ function OperatorSpace() {
               </StatusChip>
             </div>
           </div>
+        </Group>
+
+        <Group
+          label="Diagnostic"
+          note="The scan, in the page's own tokens. Live canvas, real components."
+        >
+          <DiagnosticSpecimen
+            channels={SPECIMEN_CHANNELS}
+            session={SPECIMEN_SESSION}
+            subject="knee_L"
+          />
         </Group>
 
         <Group label="Action" note="One black pill per screen. Everything else recedes.">
@@ -354,8 +447,17 @@ function MachineSpace() {
         <SpaceHeader
           label="Machine space"
           headline="What the robot says about itself"
-          blurb="Entered, never toggled. Phosphor mono on the void, radius zero, no elevation anywhere — hierarchy comes from luminance and one-pixel rules. Every component below is the same component as above."
-          meta={["JetBrains Mono", "Radius 0", "Scanline 3.5%"]}
+          blurb="The second reading of a diagnostic, and not the default one. Phosphor mono on the void, radius zero, no elevation anywhere — hierarchy comes from luminance and one-pixel rules. Every component below is the same component as above."
+          meta={["JetBrains Mono", "Radius 0", "Scanline 3.5%", "Opt-in"]}
+          note={
+            <>
+              Off by default. Run a diagnostic on a troubled unit and press{" "}
+              <span className="text-ink">Machine view</span> on the diagnostic card;
+              Escape returns. Nothing restarts on the way in or out — both surfaces are
+              projections of one incident session, which is what this page is really
+              demonstrating.
+            </>
+          }
         />
 
         <Group label="Colour" note="Read back live, same as above.">
@@ -500,9 +602,7 @@ function Library() {
             </p>
           </div>
         </header>
-        {SPECIMENS.map((spec) => (
-          <SpecimenEntry key={spec.name} spec={spec} />
-        ))}
+        <SpecimenLibrary />
       </div>
     </section>
   );

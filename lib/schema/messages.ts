@@ -179,7 +179,7 @@ export const diagEventSchema = z.discriminatedUnion("k", [
    * `outcome` is the sim's judgement of its own work — did the correction
    * clear the fault — and it is the only judgement here. The *residual* is
    * deliberately not a field: the console already computes gain and RMS from
-   * wave-vs-ref with one shared function (components/machine/waveform-math.ts,
+   * wave-vs-ref with one shared function (lib/diagnostics/waveform-math.ts,
    * whose whole reason for existing is that three surfaces must not disagree
    * about whether a channel is healthy), so a residual on the wire would be a
    * second number obliged to agree with the one under the trace. The wire
@@ -381,5 +381,15 @@ export const operatorCommandSchema = z.discriminatedUnion("c", [
    * RECALIBRATE_JOINT.
    */
   z.object({ c: z.literal("SEEK_STORYLINE"), chapter: storylineChapterSchema }),
+  /**
+   * Bring one chapter forward to now, keeping the fleet as it stands.
+   *
+   * SEEK_STORYLINE starts the story again; this one does not. The knee the
+   * operator just handled stays handled, every beat between here and the
+   * chapter fires once as history, and the chapter's first alert lands a few
+   * seconds later — so the next act meets an operator on the way back from
+   * the last one instead of waiting on a clock nobody is watching.
+   */
+  z.object({ c: z.literal("ADVANCE_STORYLINE"), chapter: storylineChapterSchema }),
 ]);
 export type OperatorCommand = z.infer<typeof operatorCommandSchema>;

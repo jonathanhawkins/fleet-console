@@ -20,3 +20,14 @@ export type Space = (typeof SPACES)[number];
  * CLAUDE.md under "If this repo moves"; they cannot import a constant.
  */
 export const SITE_URL = "https://fleet-console.pages.dev";
+
+/**
+ * Where the source lives.
+ *
+ * The demo is an engineering sample, so the code is part of what it shows —
+ * the footer links it beside the sentence admitting the fleet is simulated,
+ * which is the other half of the same disclosure. `check-receipts.mjs` holds
+ * this against the checkout's own git remote, so a move that renames the repo
+ * fails there rather than serving a 404 from the footer of every page.
+ */
+export const REPO_URL = "https://github.com/jonathanhawkins/fleet-console";

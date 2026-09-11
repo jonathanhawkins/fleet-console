@@ -521,7 +521,8 @@ export const SPECIMENS: readonly Specimen[] = [
   },
   {
     name: "ConsoleFooter",
-    purpose: "The disclaimer that appears on every page, and a slot beside it.",
+    purpose:
+      "The disclaimer and the source link that appear on every page, and a slot beside them.",
     usage: `<ConsoleFooter><SimReset /></ConsoleFooter>`,
     props: [
       {

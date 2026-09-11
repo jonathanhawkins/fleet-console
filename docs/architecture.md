@@ -68,7 +68,7 @@ would fail the build rather than quietly become a region.
 | `BatteryMeter`                    | A charge level as a bar, not a gauge.                                                                          |
 | `StatGroup`                       | A labelled figure that renders an em-dash, never an invented number, while pending.                            |
 | `SectionLabel`                    | The wide-tracked small-caps label that names every region.                                                     |
-| `ConsoleHeader` / `ConsoleFooter` | The shell: the typographic mark, and the disclaimer on every page.                                             |
+| `ConsoleHeader` / `ConsoleFooter` | The shell: the typographic mark, and the disclaimer and source link on every page.                             |
 | `registerFrame`                   | The one shared rAF loop every canvas instrument draws on.                                                      |
 
 | Fleet region     | What it is                                                                                  |

@@ -285,8 +285,10 @@ if (siteUrl === undefined) {
 
 // -- the repo slug -----------------------------------------------------------
 /**
- * The CI badge names a repository. Moved to a new one, it keeps rendering —
- * the badge of the old repo, green forever, describing nothing.
+ * The CI badge names a repository, and so does the footer's source link.
+ * Moved to a new one, the badge keeps rendering — the badge of the old repo,
+ * green forever, describing nothing — and the footer of every page links a
+ * 404.
  *
  * The truth is whatever remote this checkout actually has (`GITHUB_REPOSITORY`
  * on a runner). With neither, there is nothing to compare against and the
@@ -320,6 +322,16 @@ if (slug === null) {
     notes.push(`repo slug: ${slug}`);
   } else {
     failures.push("repo slug: the README no longer carries a CI badge");
+  }
+
+  // The footer links this on every page, so it is the copy a reader clicks.
+  const repoUrl = readFileSync(CONSTANTS, "utf8").match(
+    /export const REPO_URL = "([^"]+)"/,
+  )?.[1];
+  if (repoUrl === undefined) {
+    failures.push(`repo slug: ${CONSTANTS} no longer declares REPO_URL`);
+  } else if (repoUrl !== `https://github.com/${slug}`) {
+    failures.push(`repo slug: ${CONSTANTS} links ${repoUrl}, this repo is ${slug}`);
   }
 }
 

@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { DISCLAIMER } from "@/lib/constants";
+import { DISCLAIMER, REPO_URL } from "@/lib/constants";
 import {
   CONNECTION_STATES,
   ConnectionStatus,
@@ -212,6 +212,14 @@ describe("ConsoleFooter", () => {
   it("states the disclaimer verbatim", () => {
     render(<ConsoleFooter />);
     expect(screen.getByRole("contentinfo")).toHaveTextContent(DISCLAIMER);
+  });
+
+  it("links the source, out of the tab and without leaking the referrer", () => {
+    render(<ConsoleFooter />);
+    const link = screen.getByRole("link", { name: /source/i });
+    expect(link).toHaveAttribute("href", REPO_URL);
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noreferrer");
   });
 });
 

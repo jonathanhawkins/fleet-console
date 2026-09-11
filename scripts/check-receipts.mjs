@@ -33,6 +33,16 @@ import { execSync } from "node:child_process";
  */
 const BAND_KB = 2;
 
+/**
+ * The model gets a wider band than the chunks, because its gzip size is the one
+ * number here that depends on which zlib produced it. Node ships Chromium's
+ * deflate, which takes different fast paths per CPU architecture, and the same
+ * 200 KB binary gzips 4 KB heavier on the x86 runner than on an arm laptop —
+ * where the JS chunks differ by under one. Six kilobytes covers that with room
+ * and still catches the twenty a grown model would add.
+ */
+const MODEL_BAND_KB = 6;
+
 const OUT = resolve(process.argv[2] ?? "out");
 const README = readFileSync("README.md", "utf8");
 const failures = [];
@@ -192,7 +202,7 @@ if (existsSync(join(OUT, "index.html"))) {
       "component view",
     );
     if (claimed !== null) {
-      if (Math.abs(claimed - measured) > BAND_KB) {
+      if (Math.abs(claimed - measured) > MODEL_BAND_KB) {
         failures.push(
           `component view: README says ${claimed.toFixed(1)} KB gz, measured ${measured.toFixed(1)} KB gz`,
         );

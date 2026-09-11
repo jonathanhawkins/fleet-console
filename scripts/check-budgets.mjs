@@ -1,6 +1,5 @@
-import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { gzipSync } from "node:zlib";
+import { initialJs } from "./measure.mjs";
 
 /**
  * Bundle-budget guard. Zero-dep, CI-shaped.
@@ -10,11 +9,10 @@ import { gzipSync } from "node:zlib";
  * zod (66 KB gz) once sat on every route until caught by hand. This script
  * makes that class of regression fail a machine instead of an eyeball.
  *
- * Method (identical to docs/perf.md): for each route's exported HTML, collect
- * every `<script src>` a modern browser executes (`nomodule` polyfills are
- * skipped — ES-module browsers never request them), gzip each file at level 9,
- * and sum. Budgets sit AT the PRD §7 limit (200 KB gz), not at current usage,
- * so headroom stays spendable without ratcheting.
+ * Method (identical to docs/perf.md) lives in measure.mjs, shared with
+ * check-receipts.mjs so the gate and the README cannot disagree about what the
+ * number means. Budgets sit AT the PRD §7 limit (200 KB gz), not at current
+ * usage, so headroom stays spendable without ratcheting.
  *
  * Requires an existing static export — it never builds one, so it can't mask
  * what actually shipped. Run `pnpm build:static` first, or let `pnpm e2e` do
@@ -30,37 +28,27 @@ const BUDGETS = [
   { route: "/unit/N-01", html: join("unit", "N-01.html"), budgetKb: 200 },
 ];
 
-const read = (path) => {
-  try {
-    return readFileSync(path);
-  } catch {
-    console.error(
-      `check-budgets: missing ${path}\n` +
-        `No static export to measure. Run \`pnpm build:static\` first (or \`pnpm e2e\`, which builds one).`,
-    );
-    process.exit(1);
-  }
-};
-
 const kb = (bytes) => `${(bytes / 1024).toFixed(1)} KB`;
 let breached = false;
 const rows = [];
 
 for (const { route, html, budgetKb } of BUDGETS) {
-  const markup = read(join(OUT, html)).toString("utf8");
-  const srcs = new Set(
-    [...markup.matchAll(/<script\b[^>]*>/g)]
-      .filter(([tag]) => !/\bnomodule\b/i.test(tag))
-      .map(([tag]) => /\bsrc="([^"]+)"/.exec(tag)?.[1])
-      .filter((src) => src !== undefined),
-  );
-  let gzBytes = 0;
-  for (const src of srcs) gzBytes += gzipSync(read(join(OUT, src)), { level: 9 }).length;
+  let measured;
+  try {
+    measured = initialJs(OUT, html);
+  } catch (error) {
+    console.error(
+      `check-budgets: ${error.message}\n` +
+        `No static export to measure. Run \`pnpm build:static\` first (or \`pnpm e2e\`, which builds one).`,
+    );
+    process.exit(1);
+  }
+  const { bytes: gzBytes, scripts } = measured;
   const pass = gzBytes <= budgetKb * 1024;
   if (!pass) breached = true;
   rows.push({
     route,
-    scripts: srcs.size,
+    scripts,
     "initial JS (gz)": kb(gzBytes),
     budget: `${budgetKb} KB`,
     headroom: kb(budgetKb * 1024 - gzBytes),

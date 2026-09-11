@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { join, resolve } from "node:path";
+import { gzBytes, initialJs } from "./measure.mjs";
 import { readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 
@@ -20,6 +21,17 @@ import { execSync } from "node:child_process";
  *
  * Usage: node scripts/check-receipts.mjs [out]   (exit 1 on drift)
  */
+
+/**
+ * Two kilobytes, because the same commit does not gzip to the same size
+ * everywhere: CI measured maplibre 0.9 KB heavier than this laptop and three
+ * 0.9 KB heavier again, on identical sources. A tighter band fails on the
+ * runner rather than on a regression, which is the wrong way for a gate to be
+ * wrong. The drift these exist to catch — a chunk quietly acquiring a
+ * dependency, a table left quoting a build two months gone — is tens of
+ * kilobytes, not one.
+ */
+const BAND_KB = 2;
 
 const OUT = resolve(process.argv[2] ?? "out");
 const README = readFileSync("README.md", "utf8");
@@ -75,7 +87,18 @@ const MARKERS = [
     needle: "WebGLRenderer",
     pattern: /three \+ R3F \(([\d.]+) KB gz\)/,
   },
+  // The same string the e2e uses to recognise machine-space code on the wire,
+  // so the number the README prints and the chunk the spec watches for cannot
+  // come to mean different things.
+  {
+    label: "machine space",
+    needle: "SCANNING ACTUATOR BUS",
+    pattern: /machine space \(([\d.]+) KB gz\)/,
+  },
 ];
+
+/** What each marker actually weighed, for the rows that are sums of them. */
+const lazyKb = {};
 
 const chunkDir = join(OUT, "_next", "static", "chunks");
 if (existsSync(chunkDir)) {
@@ -100,15 +123,10 @@ if (existsSync(chunkDir)) {
       continue;
     }
     const measured = bytes / 1024;
+    lazyKb[label] = measured;
     const claimed = quoted(pattern, label);
     if (claimed === null) continue;
-    // Two kilobytes, because the same commit does not gzip to the same size
-    // everywhere: CI measured maplibre 0.9 KB heavier than this laptop and
-    // three 0.9 KB heavier again, on identical sources. A tighter band fails
-    // on the runner rather than on a regression, which is the wrong way for a
-    // gate to be wrong. The drift this exists to catch — a chunk quietly
-    // acquiring a dependency — is tens of kilobytes, not one.
-    if (Math.abs(claimed - measured) > 2) {
+    if (Math.abs(claimed - measured) > BAND_KB) {
       failures.push(
         `${label}: README says ${claimed.toFixed(1)} KB gz, measured ${measured.toFixed(1)} KB gz`,
       );
@@ -118,6 +136,73 @@ if (existsSync(chunkDir)) {
   }
 } else {
   notes.push(`chunks: skipped (no ${chunkDir}; run \`pnpm build:static\` first)`);
+}
+
+// -- the budget table --------------------------------------------------------
+/**
+ * The rows the README prints, against the build it claims to describe.
+ *
+ * `check-budgets.mjs` fails a route that crosses the PRD ceiling, and that is
+ * the check that matters — but nothing failed when a route got *lighter* and
+ * the table went on quoting the heavier number. That is the drift that
+ * actually happened here, and it is the worse direction for a repo whose
+ * argument is its receipts: a reader who re-measures finds the numbers do not
+ * match, and has no way to tell which of the two is the lie. Measured through
+ * measure.mjs, so this and the budget gate cannot disagree about the method.
+ */
+const TABLE = [
+  {
+    label: "fleet page initial JS",
+    html: "index.html",
+    pattern: /Fleet page initial JS < 200 KB gz\s*\|\s*\*\*([\d.]+) KB\*\*/,
+  },
+  {
+    label: "unit page initial JS",
+    html: join("unit", "N-01.html"),
+    pattern: /Unit page initial JS < 200 KB gz\s*\|\s*\*\*([\d.]+) KB\*\*/,
+  },
+];
+
+if (existsSync(join(OUT, "index.html"))) {
+  for (const { label, html, pattern } of TABLE) {
+    const measured = initialJs(OUT, html).bytes / 1024;
+    const claimed = quoted(pattern, label);
+    if (claimed === null) continue;
+    if (Math.abs(claimed - measured) > BAND_KB) {
+      failures.push(
+        `${label}: README says ${claimed.toFixed(1)} KB gz, measured ${measured.toFixed(1)} KB gz`,
+      );
+    } else {
+      notes.push(`${label}: ${measured.toFixed(1)} KB gz`);
+    }
+  }
+
+  /**
+   * The component view is the one row that is a sum: the three + R3F chunks
+   * plus the model they load. Neither half is gated on its own, so a model
+   * that grows by twenty kilobytes lands entirely inside a number nobody
+   * rechecks.
+   */
+  const model = join(OUT, "models", "chassis-silhouette.glb");
+  const three = lazyKb["three + R3F"];
+  if (existsSync(model) && three !== undefined) {
+    const measured = three + gzBytes(model) / 1024;
+    const claimed = quoted(
+      /Component view \(three \+ GLB\) < 500 KB gz\s*\|\s*([\d.]+) KB/,
+      "component view",
+    );
+    if (claimed !== null) {
+      if (Math.abs(claimed - measured) > BAND_KB) {
+        failures.push(
+          `component view: README says ${claimed.toFixed(1)} KB gz, measured ${measured.toFixed(1)} KB gz`,
+        );
+      } else {
+        notes.push(`component view: ${measured.toFixed(1)} KB gz`);
+      }
+    }
+  }
+} else {
+  notes.push(`budget table: skipped (no export; run \`pnpm build:static\` first)`);
 }
 
 // -- the URLs ----------------------------------------------------------------

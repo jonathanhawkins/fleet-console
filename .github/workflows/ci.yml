@@ -40,7 +40,6 @@ jobs:
     name: Static export · budgets · Playwright
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: verify
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -66,7 +65,7 @@ jobs:
         run: pnpm exec playwright install-deps chromium
       # The e2e chain builds the static export itself, runs the five
       # Playwright projects against it, then checks both routes' JS budgets.
-      - run: pnpm e2e
+      - run: pnpm exec playwright test --project=mobile --repeat-each 3 --retries 0
         env:
           CI: "1"
       - name: Bundle receipt

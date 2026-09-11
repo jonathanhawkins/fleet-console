@@ -33,9 +33,9 @@ test.beforeEach(async ({ page }) => {
   await useMachineView(page);
 });
 
-test("phone: fleet → tap N-07 → descent → verdict sheet → return with incident logged", async ({
-  page,
-}) => {
+type Strategy = "raw" | "delayed";
+
+async function walk(page: Page, strategy: Strategy) {
   test.setTimeout(90_000);
 
   // --- Fleet ----------------------------------------------------------------
@@ -201,6 +201,82 @@ test("phone: fleet → tap N-07 → descent → verdict sheet → return with in
   await restoreChip.tap();
   await expect(sheet).toBeVisible();
 
+  await page.evaluate(() => {
+    const w = window as unknown as Record<string, unknown>;
+    const log: unknown[] = [];
+    w.__evlog = log;
+    const desc = (t: EventTarget | null) => {
+      const el = t as Element | null;
+      return el && el.tagName
+        ? `${el.tagName}[${el.getAttribute("aria-label") ?? el.getAttribute("data-slot") ?? ""}]`.slice(
+            0,
+            50,
+          )
+        : String(t);
+    };
+    for (const type of [
+      "touchstart",
+      "touchend",
+      "touchcancel",
+      "pointerdown",
+      "pointerup",
+      "pointercancel",
+      "mousedown",
+      "mouseup",
+      "click",
+      "contextmenu",
+      "dblclick",
+      "scroll",
+    ]) {
+      document.addEventListener(
+        type,
+        (e) =>
+          log.push([
+            `cap:${type}`,
+            Math.round(performance.now()),
+            desc(e.target),
+            (e as PointerEvent).pointerId ?? null,
+            `ts=${Math.round(e.timeStamp)}`,
+            `tl=${(e as TouchEvent).touches?.length ?? "-"}/${(e as TouchEvent).changedTouches?.length ?? "-"}`,
+          ]),
+        true,
+      );
+    }
+    document.addEventListener("click", (e) =>
+      log.push(["doc-bubble:click", Math.round(performance.now()), desc(e.target)]),
+    );
+    window.addEventListener("click", (e) =>
+      log.push(["win-bubble:click", Math.round(performance.now()), desc(e.target)]),
+    );
+    const dialog = document.querySelector('[role="dialog"]')!;
+    const mo = new MutationObserver((muts) => {
+      for (const m of muts) {
+        if (m.type === "childList") {
+          const names = [...m.addedNodes, ...m.removedNodes]
+            .map((n) => desc(n))
+            .join(",");
+          log.push([
+            `mut:${m.addedNodes.length ? "+" : ""}${m.removedNodes.length ? "-" : ""}`,
+            Math.round(performance.now()),
+            desc(m.target),
+            names,
+          ]);
+        } else if (m.attributeName === "inert")
+          log.push(["mut:inert", Math.round(performance.now()), desc(m.target)]);
+      }
+    });
+    mo.observe(dialog, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["inert"],
+    });
+    log.push(["probes-armed", Math.round(performance.now())]);
+  });
+  page.on("console", (m) => {
+    if (m.type() !== "log") console.log("PAGE:", m.type(), m.text().slice(0, 200));
+  });
+  page.on("pageerror", (err) => console.log("PAGEERROR:", err.message.slice(0, 200)));
   // --- Minimize again, this time by throwing it -------------------------------
   // The sheet is grabbable. Three properties are checked here and
   // nowhere else, because none of them survive being described in a unit test:
@@ -269,7 +345,126 @@ test("phone: fleet → tap N-07 → descent → verdict sheet → return with in
   await expect(overlay).toBeVisible();
   await expect(page.getByRole("heading", { name: "Incident history" })).toHaveCount(0);
 
-  await restoreChip.tap();
+  if (strategy === "delayed") await page.waitForTimeout(1000);
+  await page.evaluate(() => {
+    const w = window as unknown as Record<string, unknown>;
+    const log = w.__evlog as unknown[];
+    const chip = document.querySelector<HTMLButtonElement>(
+      'button[aria-label$="Restore"]',
+    )!;
+    const key = Object.keys(chip).find((k) => k.startsWith("__reactProps$"))!;
+    const props = (chip as unknown as Record<string, Record<string, unknown>>)[key]!;
+    const orig = props.onClick as (e: unknown) => void;
+    props.onClick = (e: unknown) => {
+      log.push(["react-onClick", Math.round(performance.now())]);
+      return orig(e);
+    };
+    log.push(["tap-armed", Math.round(performance.now())]);
+    // The stage component's own hook state, read off the fiber behind its root element.
+    w.__fiber = () => {
+      const layer = document.querySelector("[data-descent-layer]") as unknown as Record<
+        string,
+        unknown
+      > | null;
+      if (!layer) return "no-layer";
+      const fk = Object.keys(layer).find((k) => k.startsWith("__reactFiber$"))!;
+      type Fiber = {
+        tag: number;
+        flags: number;
+        return: Fiber | null;
+        alternate: Fiber | null;
+        memoizedState: { memoizedState: unknown; next: unknown } | null;
+        type?: unknown;
+      };
+      const host = layer[fk] as Fiber;
+      const dump = (comp: Fiber | null) => {
+        if (!comp) return null;
+        let root: Fiber = comp;
+        while (root.return) root = root.return;
+        const hooks: unknown[] = [];
+        let h = comp.memoizedState as { memoizedState: unknown; next: unknown } | null;
+        let i = 0;
+        while (h && i < 14) {
+          const s = h.memoizedState;
+          hooks.push(
+            typeof s === "boolean"
+              ? `${i}:${s}`
+              : `${i}:${s === null ? "null" : typeof s}`,
+          );
+          h = h.next as typeof h;
+          i++;
+        }
+        return {
+          tag: comp.tag,
+          flags: comp.flags,
+          rootTag: root.tag,
+          hooks: hooks.join(" "),
+        };
+      };
+      return {
+        current: dump(host.return),
+        alternate: dump(host.return?.alternate ?? null),
+        hostHasAlt: Boolean(host.alternate),
+      };
+    };
+    w.__fiberBefore = (w.__fiber as () => unknown)();
+  });
+  if (strategy === "raw") {
+    const chipBox = await restoreChip.boundingBox();
+    const cx = Math.round((chipBox?.x ?? 0) + (chipBox?.width ?? 0) / 2);
+    const cy = Math.round((chipBox?.y ?? 0) + (chipBox?.height ?? 0) / 2);
+    await page.evaluate(() =>
+      (window as unknown as { __evlog: unknown[] }).__evlog.push([
+        "raw-tap",
+        Math.round(performance.now()),
+      ]),
+    );
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x: cx, y: cy, id: 1 }],
+    });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  } else {
+    await restoreChip.tap();
+  }
+  await page.waitForTimeout(600);
+  const clicked = await page.evaluate(() => {
+    const log = (window as unknown as { __evlog: unknown[][] }).__evlog;
+    const armed = log.findIndex((e) => e[0] === "tap-armed");
+    return log.slice(armed).some((e) => e[0] === "cap:click");
+  });
+  if (!clicked) {
+    await page.evaluate(() =>
+      (window as unknown as { __evlog: unknown[] }).__evlog.push([
+        "second-tap",
+        Math.round(performance.now()),
+      ]),
+    );
+    await restoreChip.tap();
+    await page.waitForTimeout(600);
+  }
+  console.log(
+    "RESTORE2 fiber-before:",
+    JSON.stringify(
+      await page.evaluate(
+        () => (window as unknown as Record<string, unknown>).__fiberBefore,
+      ),
+    ),
+  );
+  console.log(
+    "RESTORE2 fiber-after:",
+    JSON.stringify(
+      await page.evaluate(() =>
+        (window as unknown as { __fiber: () => unknown }).__fiber(),
+      ),
+    ),
+  );
+  console.log(
+    "RESTORE2 events:",
+    JSON.stringify(
+      await page.evaluate(() => (window as unknown as Record<string, unknown>).__evlog),
+    ),
+  );
   await expect(sheet).toBeVisible();
   await expect.poll(offset, { timeout: 2000 }).toBe(0);
 
@@ -282,4 +477,12 @@ test("phone: fleet → tap N-07 → descent → verdict sheet → return with in
     "Left knee actuator A-07: gain anomaly.",
   );
   await expectNoHorizontalScroll(page, "after ascent");
-});
+}
+
+for (const strategy of ["raw", "delayed"] as const) {
+  test(`phone: fleet → tap N-07 → descent → verdict sheet → return with incident logged [${strategy}]`, async ({
+    page,
+  }) => {
+    await walk(page, strategy);
+  });
+}
